@@ -1,7 +1,12 @@
 use std::{env, path::PathBuf};
 
+type IncludePaths = Vec<PathBuf>;
+type Defines = Vec<(String, Option<String>)>;
+type VersionOpt = Option<String>;
+type ProbeResult = Option<(IncludePaths, Defines, VersionOpt)>;
+
 #[cfg(target_env = "msvc")]
-fn find_libvips() -> Option<(Vec<PathBuf>, Vec<(String, Option<String>)>, Option<String>)> {
+fn find_libvips() -> ProbeResult {
     // On MSVC, only links are handled, and headers are left to the pre-installed pkg-config or user-customized
     // No impact on macOS/Linux users
     let _lib = vcpkg::find_package("vips").ok()?;
@@ -10,7 +15,7 @@ fn find_libvips() -> Option<(Vec<PathBuf>, Vec<(String, Option<String>)>, Option
 }
 
 #[cfg(not(target_env = "msvc"))]
-fn find_libvips() -> Option<(Vec<PathBuf>, Vec<(String, Option<String>)>, Option<String>)> {
+fn find_libvips() -> ProbeResult {
     let mut cfg = pkg_config::Config::new();
     if cfg!(feature = "static") {
         cfg.statik(true);
@@ -21,17 +26,17 @@ fn find_libvips() -> Option<(Vec<PathBuf>, Vec<(String, Option<String>)>, Option
     let lib = cfg.atleast_version("8.2").probe("vips").ok()?;
 
     // Normalize version to Option<String>
-    let version = Some(lib.version.clone());
+    let version: VersionOpt = Some(lib.version.clone());
 
     // Keep defines empty for cross-version compatibility
     // To be compatible with different implementations, empty defines are returned first;
     // If you want to enable it, you can change this line to 'lib.defines'
-    let defines: Vec<(String, Option<String>)> = Vec::new();
+    let defines: Defines = Vec::new();
 
     Some((lib.include_paths, defines, version))
 }
 
-fn generate_bindings(include_paths: &[PathBuf], defines: &[(String, Option<String>)]) {
+fn generate_bindings(include_paths: &[PathBuf], defines: &Defines) {
     println!("cargo:rerun-if-changed='wrapper.h'");
     println!("cargo:rerun-if-changed='build.rs'");
     println!("cargo:rerun-if-env-changed=LIBVIPS_NO_BINDGEN");
@@ -45,6 +50,7 @@ fn generate_bindings(include_paths: &[PathBuf], defines: &[(String, Option<Strin
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .rustified_enum(".*")
         .layout_tests(false)
+        .generate_comments(false)
         .blocklist_type("max_align_t")
         .blocklist_item("FP_NAN")
         .blocklist_item("FP_INFINITE")
