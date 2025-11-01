@@ -6,7 +6,7 @@
 
 Low-level Rust FFI bindings for `libvips`. Provides the foundation for higher-level, safer wrappers.
 
-- Docs: https://elbaro.github.io/vips-sys/vips_sys/
+- Docs: https://houseme.github.io/vips-sys/vips_sys/
 - Requirement: `libvips >= 8.2` (validated with `8.17.2`)
 - Goal: stable builds, cross-platform reuse, and in-sync with upstream `libvips`
 
@@ -82,7 +82,7 @@ Environment variables:
 
 ## License
 
-MIT
+[MIT](LICENSE)
 
 ## Changelog
 

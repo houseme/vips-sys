@@ -6,7 +6,7 @@
 
 Rust 对 `libvips` 的低层 FFI 绑定。面向上层封装（如更安全的 API）提供基础设施。
 
-- 文档：`https://elbaro.github.io/vips-sys/vips_sys/`
+- 文档：`https://houseme.github.io/vips-sys/vips_sys/`
 - 要求：`libvips >= 8.2`（已在 `8.17.2` 上验证）
 - 目标：构建稳定、跨平台可复用、与上游 `libvips` 同步升级
 
@@ -82,7 +82,7 @@ vips-sys = { version = "0.1.3-beta.1", features = ["helpers"] }
 
 ## 许可
 
-`MIT`
+[`MIT`](LICENSE)
 
 ## 变更日志
 

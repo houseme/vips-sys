@@ -37,7 +37,7 @@ jobs:
           components: clippy
 
       - name: Install clippy-sarif
-        uses: taiki-e/install-action@clippy-sarif
+        run: taiki-e/install-action@clippy-sarif
 
       - name: Install sarif-fmt
         run: taiki-e/install-action@sarif-fmt
