@@ -32,15 +32,11 @@ jobs:
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo dependencies
+        run: taiki-e/install-action@v2
         with:
-          toolchain: stable
-          components: clippy
-
-      - name: Install clippy-sarif
-        run: taiki-e/install-action@clippy-sarif
-
-      - name: Install sarif-fmt
-        run: taiki-e/install-action@sarif-fmt
+          tool: clippy-sarif,sarif-fmt
 
       - name: Set up system dependencies
         run: |
