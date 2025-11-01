@@ -42,6 +42,10 @@ jobs:
       - name: Install sarif-fmt
         run: taiki-e/install-action@sarif-fmt
 
+      - name: Set up system dependencies
+        run: |
+          sudo apt-get update 
+          sudo apt-get install -y pkg-config libvips-dev
       - name: Run rust-clippy
         run:
           cargo clippy
