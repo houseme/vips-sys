@@ -2,7 +2,12 @@
 
 [English](README.md) | [简体中文](README_CN.md)
 
-[![Crates.io](https://img.shields.io/crates/v/vips-sys.svg)](https://crates.io/crates/vips-sys) [![Build Status](https://travis-ci.org/elbaro/vips-sys.svg?branch=master)](https://travis-ci.org/elbaro/vips-sys) [![Code Coverage](https://codecov.io/gh/elbaro/vips-sys/branch/master/graph/badge.svg)](https://codecov.io/gh/elbaro/vips-sys)
+[![Crates.io](https://img.shields.io/crates/v/vips-sys.svg)](https://crates.io/crates/vips-sys)
+[![Rust](https://github.com/houseme/vips-sys/actions/workflows/rust.yml/badge.svg)](https://github.com/houseme/vips-sys/actions/workflows/rust.yml)
+[![Code Coverage](https://codecov.io/gh/elbaro/vips-sys/branch/master/graph/badge.svg)](https://codecov.io/gh/elbaro/vips-sys)
+[![docs.rs](https://docs.rs/vips-sys/badge.svg)](https://docs.rs/vips-sys/)
+[![License](https://img.shields.io/crates/l/vips-sys)](./LICENSE)
+[![Downloads](https://img.shields.io/crates/d/vips-sys)](https://crates.io/crates/vips-sys)
 
 Rust 对 `libvips` 的低层 FFI 绑定。面向上层封装（如更安全的 API）提供基础设施。
 
