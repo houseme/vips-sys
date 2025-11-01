@@ -33,8 +33,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install cargo dependencies
-        run: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@v2
         with:
           tool: clippy-sarif,sarif-fmt
 
