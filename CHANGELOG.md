@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Documentation: Supplementary installation, build, and troubleshooting instructions.
 - CI: It is recommended to override the minimum smoke test for macOS and Linux ('helpers::init()').
 
-## [0.1.3-beta.1] - 2025-10-30
+## [0.1.3-beta.1] - 2025-11-01
 
 ### Added
 
