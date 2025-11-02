@@ -1,9 +1,9 @@
-#![allow(non_upper_case_globals)]
-#![allow(non_camel_case_types)]
-#![allow(non_snake_case)]
+#[allow(non_upper_case_globals, non_camel_case_types, non_snake_case)]
+mod ffi {
+    include!(concat!(env!("OUT_DIR"), "/binding.rs"));
+}
 
-// Unification only includes bindings generated during build time
-include!(concat!(env!("OUT_DIR"), "/binding.rs"));
+pub use ffi::*;
 
 // Optional minimum safety package for easy initialization and shutdown (without changing the positioning of -sys)
 #[cfg(feature = "helpers")]

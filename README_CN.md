@@ -1,93 +1,93 @@
 # vips-sys
 
-[English](README.md) | [简体中文](README_CN.md)
+[English](README.md) \| [简体中文](README_CN.md)
 
 [![Crates.io](https://img.shields.io/crates/v/vips-sys.svg)](https://crates.io/crates/vips-sys)
 [![Rust](https://github.com/houseme/vips-sys/actions/workflows/rust.yml/badge.svg)](https://github.com/houseme/vips-sys/actions/workflows/rust.yml)
+[![Docs](https://img.shields.io/badge/docs-online-blue)](https://houseme.github.io/vips-sys/vips-sys/)
 [![docs.rs](https://docs.rs/vips-sys/badge.svg)](https://docs.rs/vips-sys/)
 [![License](https://img.shields.io/crates/l/vips-sys)](./LICENSE)
 [![Downloads](https://img.shields.io/crates/d/vips-sys)](https://crates.io/crates/vips-sys)
 
-Rust 对 `libvips` 的低层 FFI 绑定。面向上层封装（如更安全的 API）提供基础设施。
+`libvips` 的 Rust 低层 FFI 绑定。追求稳定、精简，可作为更高层安全封装的基础。
 
-- 文档：`https://houseme.github.io/vips-sys/vips_sys/`
-- 要求：`libvips >= 8.2`（已在 `8.17.2` 上验证）
-- 目标：构建稳定、跨平台可复用、与上游 `libvips` 同步升级
+- 文档：https://houseme.github.io/vips-sys/vips_sys/
+- 依赖：`libvips >= 8.2`（已在 `8.17.2` 验证）
+- 目标：构建稳定、跨平台复用、跟踪上游
 
 ## 安装
 
 - macOS
     - `brew install vips pkg-config`
+    - Apple Silicon: 确认 `PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig`
 - Debian/Ubuntu
     - `sudo apt-get install -y libvips-dev pkg-config`
-- Windows (MSVC)
-    - `vcpkg install vips`，并确保环境可被 `cargo` 检测
+- Windows（MSVC）
+    - `vcpkg install vips` 并确保 `cargo` 可见
 
-确保 `pkg-config --cflags --libs vips` 可正确输出（Windows 由 `vcpkg` 负责链接）。
+请验证 `pkg-config --cflags --libs vips` 可用（MSVC 链接通过 `vcpkg`）。
 
-## 特性与版本
+## 可选特性
 
-- 可选特性
-    - `static`：静态链接偏好
-    - `dynamic`：动态链接偏好（默认）
-    - `helpers`：启用最小安全封装（`init`／`shutdown`／`version`）
-- 构建期导出
-    - `LIBVIPS_VERSION`：探测到的 `libvips` 版本字符串
-    - 当版本 `>= 8.17` 时导出 `cfg(vips_8_17)`（供上层 crate 做条件编译）
-- 版本化绑定
-    - 默认包含 `OUT_DIR/binding.rs`
-    - 兼容路径：如开启 `vips_8_74` 时包含 `binding_8_74.rs`
+- `static`：优先静态链接
+- `dynamic`：优先动态链接（默认）
+- `helpers`：提供 `init`/`shutdown`/`version` 的最小安全辅助
 
-## 使用示例（启用 `helpers`）
+构建期导出：
+
+- `LIBVIPS_VERSION`：检测到的 `libvips` 版本
+- `cfg(vips_8_17)`：当版本 `>= 8.17` 启用
+
+## 示例（启用 `helpers`）
 
 ```rust
 use vips_sys::helpers;
 
 fn main() {
     helpers::init("vips-sys-example").expect("vips init failed");
-    let ver = helpers::version();
-    println!("libvips version: {}.{}.{}", ver.0, ver.1, ver.2);
+    let (a, b, c) = helpers::version();
+    println!("libvips version: {}.{}.{}", a, b, c);
     helpers::shutdown();
 }
 ```
 
-Cargo 依赖示例：
+Cargo:
 
 ```toml
 [dependencies]
-vips-sys = { version = "0.1.3-beta.1", features = ["helpers"] }
+vips-sys = { version = "0.1.3-beta.2", features = ["helpers"] }
 ```
 
 ## 构建说明
 
-本 crate 在构建时使用 `bindgen` 自动生成绑定：
+本仓库在构建时使用 `bindgen`：
 
-- 通过 `pkg-config` 探测 `include` 路径并传递给 `clang`
-- 关闭 `layout_tests`，使用 `rustified_enum(".*")`
-- 使用 `blocklist_*` 避免与平台定义冲突
+- 通过 `pkg-config` 获取包含目录并传递给 `clang`
+- 关闭 `layout_tests`，开启 `rustified_enum(".*")`
+- 关闭注释生成，避免 doctest 误报
+- 屏蔽部分条目以提升可移植性
 
-相关环境变量：
+环境变量：
 
-- `PKG_CONFIG_PATH`：`pkg-config` 搜索路径（如 macOS M1：`/opt/homebrew/lib/pkgconfig`）
-- `LIBVIPS_NO_BINDGEN`：设置后跳过绑定生成（使用已有产物）
-- `BINDGEN_EXTRA_CLANG_ARGS`：为 `clang` 追加自定义参数（如额外 `-I`）
-- `LIBCLANG_PATH`：`libclang` 动态库位置（如本地 LLVM 安装）
+- `PKG_CONFIG_PATH`：`vips.pc` 搜索路径
+- `LIBVIPS_NO_BINDGEN`：跳过绑定生成，复用已有输出
+- `BINDGEN_EXTRA_CLANG_ARGS`：额外传递给 `clang` 的参数（如 `-I`）
+- `LIBCLANG_PATH`：`libclang` 路径
 
-## 常见问题
+## 故障排查
 
-- 无法找到 `vips`：
-    - 确认系统已安装 `libvips` 与 `pkg-config`（或 Windows 的 `vcpkg`）
-    - 检查 `PKG_CONFIG_PATH` 是否包含 `vips.pc` 所在目录
+- 未找到 `vips`：
+    - 安装 `libvips` 与 `pkg-config`（Windows 使用 `vcpkg`）
+    - 检查 `PKG_CONFIG_PATH`
 - 绑定生成失败：
-    - 设置 `LIBCLANG_PATH` 指向可用的 `libclang`
-    - 通过 `BINDGEN_EXTRA_CLANG_ARGS` 传入缺失的 `-I` 路径
-- 静态链接异常（macOS）：
-    - 优先使用动态链接或参考 Homebrew 已知链接问题
+    - 设置 `LIBCLANG_PATH` 或通过 `BINDGEN_EXTRA_CLANG_ARGS` 添加缺失的包含目录
+- macOS 静态链接：
+    - 建议优先动态链接，避免 Homebrew 限制
 
-## 许可
+## 许可证
 
-[`MIT`](LICENSE)
+[MIT](LICENSE)
 
-## 变更日志
+## 更新日志
 
 参见 [`CHANGELOG.md`](CHANGELOG.md)。

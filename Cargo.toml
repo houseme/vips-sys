@@ -1,6 +1,6 @@
 [package]
 name = "vips-sys"
-version = "0.1.3-beta.1"
+version = "0.1.3-beta.2"
 authors = ["elbaro <elbaro@github>", "houseme <housemecn@gmail.com"]
 edition = "2021"
 description = "libvips bindings for Rust"
@@ -11,6 +11,9 @@ keywords = ["vips", "image", "libvips"]
 categories = ["multimedia::images", "external-ffi-bindings"]
 license = "MIT"
 links = "vips"
+
+[lib]
+doctest = false
 
 [features]
 static = []

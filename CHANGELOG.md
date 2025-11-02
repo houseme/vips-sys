@@ -9,8 +9,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
-- Documentation: Supplementary installation, build, and troubleshooting instructions.
-- CI: It is recommended to override the minimum smoke test for macOS and Linux ('helpers::init()').
+## [0.1.3-beta.2] - 2025-11-02
+
+- Fix: disable doctests for auto-generated bindings to avoid rustdoc failures.
+- Chore: refactor build script types to reduce `clippy::type-complexity`.
+- Docs: rewrite `README.md` in English and add `README_CN.md` with language switch.
+- Build: ensure bindgen does not generate comments to keep bindings lean.
 
 ## [0.1.3-beta.1] - 2025-11-01
 
