@@ -2,9 +2,9 @@ name: Rust
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "main", "feature/**" ]
   pull_request:
-    branches: [ "master" ]
+    branches: [ "main", "feature/**" ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -16,9 +16,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
       - name: Set up system dependencies
         run: |
-          sudo apt-get update 
+          sudo apt-get update
           sudo apt-get install -y pkg-config libvips-dev
       - name: Build
         run: cargo build --verbose

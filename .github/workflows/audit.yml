@@ -8,8 +8,10 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
       - name: Run audit check
         uses: rustsec/audit-check@v2
         with:
