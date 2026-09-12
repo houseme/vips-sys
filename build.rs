@@ -267,12 +267,12 @@ fn find_libvips() -> ProbeResult {
     }
 
     // 3) Build static libvips from the vendored submodule
-    if prefer_static() {
-        if let Some((includes, lib_dir)) = try_build_vendor_static() {
-            println!("cargo:rustc-link-search=native={}", lib_dir.display());
-            emit_link("static");
-            return Some((includes, Vec::new(), None));
-        }
+    if prefer_static()
+        && let Some((includes, lib_dir)) = try_build_vendor_static()
+    {
+        println!("cargo:rustc-link-search=native={}", lib_dir.display());
+        emit_link("static");
+        return Some((includes, Vec::new(), None));
     }
 
     // 4) Vendored headers only
@@ -312,12 +312,11 @@ fn generate_bindings(include_paths: &[PathBuf], defines: &Defines, version: Opti
     let fp = bindings_fingerprint(include_paths, version);
 
     // Skip the expensive clang/bindgen pass when inputs are unchanged.
-    if binding_rs.is_file() {
-        if let Ok(prev) = fs::read_to_string(&stamp) {
-            if prev.trim() == fp {
-                return;
-            }
-        }
+    if binding_rs.is_file()
+        && let Ok(prev) = fs::read_to_string(&stamp)
+        && prev.trim() == fp
+    {
+        return;
     }
 
     let mut builder = bindgen::Builder::default()
@@ -418,14 +417,14 @@ fn bindings_fingerprint(include_paths: &[PathBuf], version: Option<&str>) -> Str
 fn apply_version_cfg(version: &str) {
     println!("cargo:rustc-env=LIBVIPS_VERSION={}", version);
     let ver_parts: Vec<_> = version.split('.').collect();
-    if ver_parts.len() >= 2 {
-        if let (Ok(major), Ok(minor)) = (ver_parts[0].parse::<u32>(), ver_parts[1].parse::<u32>()) {
-            if major > 8 || (major == 8 && minor >= 17) {
-                println!("cargo:rustc-cfg=vips_8_17");
-            }
-            if major > 8 || (major == 8 && minor >= 16) {
-                println!("cargo:rustc-cfg=vips_8_16");
-            }
+    if ver_parts.len() >= 2
+        && let (Ok(major), Ok(minor)) = (ver_parts[0].parse::<u32>(), ver_parts[1].parse::<u32>())
+    {
+        if major > 8 || (major == 8 && minor >= 17) {
+            println!("cargo:rustc-cfg=vips_8_17");
+        }
+        if major > 8 || (major == 8 && minor >= 16) {
+            println!("cargo:rustc-cfg=vips_8_16");
         }
     }
 }
