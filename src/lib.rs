@@ -69,7 +69,8 @@ pub mod helpers {
     /// for the process lifetime.
     pub fn version_string() -> &'static str {
         static STR: OnceLock<&'static str> = OnceLock::new();
-        *STR.get_or_init(|| unsafe {
+        // Deref-coerce `&'static &'static str` → `&'static str` (no explicit `*`).
+        STR.get_or_init(|| unsafe {
             let p = vips_version_string();
             if p.is_null() {
                 ""
