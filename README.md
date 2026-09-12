@@ -189,3 +189,15 @@ This is engineering guidance, not legal advice. For commercial compliance, consu
 ## Changelog
 
 See [`CHANGELOG.md`](CHANGELOG.md).
+
+## Releasing (maintainers)
+
+1. Bump `version` in `Cargo.toml` and move notes under that version in `CHANGELOG.md`.
+2. Commit and tag, e.g. `git tag v0.2.0 && git push origin v0.2.0`.
+3. GitHub Actions workflow **Release** (`.github/workflows/release.yml`) will:
+   - fail if the tag does not match `Cargo.toml`
+   - run `cargo test`
+   - `cargo publish` (needs secret `CRATES_IO_TOKEN`)
+   - create a GitHub Release using the matching CHANGELOG section
+
+Prerelease tags such as `v0.3.0-beta.1` are marked as prereleases on GitHub.

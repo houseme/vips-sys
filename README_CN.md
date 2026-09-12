@@ -181,3 +181,15 @@ fn main() {
 ## 更新日志
 
 参见 [`CHANGELOG.md`](CHANGELOG.md)。
+
+## 发布（维护者）
+
+1. 修改 `Cargo.toml` 的 `version`，并把变更写入 `CHANGELOG.md` 对应小节。
+2. 提交并打 tag，例如：`git tag v0.2.0 && git push origin v0.2.0`。
+3. Actions 工作流 **Release**（`.github/workflows/release.yml`）会：
+   - 校验 tag 与 `Cargo.toml` 版本一致
+   - 运行 `cargo test`
+   - 执行 `cargo publish`（需仓库密钥 `CRATES_IO_TOKEN`）
+   - 按 CHANGELOG 创建 GitHub Release
+
+形如 `v0.3.0-beta.1` 的预发布 tag 会在 GitHub 上标记为 prerelease。

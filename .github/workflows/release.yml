@@ -1,0 +1,99 @@
+# Publish vips-sys when a version tag is pushed (e.g. v0.2.0).
+#
+# Required repository secret:
+#   CRATES_IO_TOKEN — crates.io API token with publish rights for vips-sys
+#
+# Tag format: vX.Y.Z or vX.Y.Z-pre  (must match Cargo.toml version without the leading v)
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+*"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  verify:
+    name: Verify tag and build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install libvips
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libvips-dev
+
+      - name: Check tag matches Cargo.toml version
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          crate="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)"
+          echo "tag=${tag} crate=${crate}"
+          if [ "${tag}" != "${crate}" ]; then
+            echo "::error::Git tag v${tag} does not match Cargo.toml version ${crate}"
+            exit 1
+          fi
+
+      - name: Cargo test
+        run: cargo test --features helpers
+
+      - name: Package dry-run
+        run: cargo package --list
+
+  publish:
+    name: Publish crates.io and GitHub Release
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install libvips
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libvips-dev
+
+      - name: Publish to crates.io
+        run: cargo publish --token "${CRATES_IO_TOKEN}"
+        env:
+          CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+
+      - name: Extract changelog for this version
+        id: changelog
+        run: |
+          set -euo pipefail
+          ver="${GITHUB_REF_NAME#v}"
+          # Pull the section between "## [ver]" and the next "## [" heading
+          awk -v ver="$ver" '
+            $0 ~ "^## \\[" ver "\\]" {grab=1; next}
+            grab && /^## \[/ {exit}
+            grab {print}
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "No CHANGELOG section for ${ver}; using tag name only." >&2
+            echo "v${ver}" > release-notes.md
+          fi
+          cat release-notes.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          body_path: release-notes.md
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
