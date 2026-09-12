@@ -1,0 +1,4 @@
+[submodule "vendor/libvips"]
+	path = vendor/libvips
+	url = https://github.com/libvips/libvips.git
+	branch = v8.18.6

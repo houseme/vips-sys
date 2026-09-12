@@ -27,6 +27,24 @@ Low-level Rust FFI bindings for `libvips`. Designed to be stable, minimal, and a
 
 Verify `pkg-config --cflags --libs vips` works (MSVC links via `vcpkg`).
 
+### Vendored libvips (submodule)
+
+This crate vendors [libvips](https://github.com/libvips/libvips) as a git submodule at
+`vendor/libvips` (pinned to `v8.18.6`), following common `*-sys` crate practice
+(see [kornel.ski/rust-sys-crate](https://kornel.ski/rust-sys-crate)):
+
+```bash
+git clone --recurse-submodules <this-repo>
+# or after clone:
+git submodule update --init --recursive
+```
+
+Build resolution order:
+
+1. `LIBVIPS_LIB_DIR` / `LIBVIPS_INCLUDE_DIR` (and optional `LIBVIPS_STATIC=1`)
+2. System library via `pkg-config` (Linux/BSD/macOS) or `vcpkg` (MSVC)
+3. Vendored headers under `vendor/libvips` (linking still requires a libvips library)
+
 ## Features
 
 - `static`: prefer static linking
@@ -70,7 +88,10 @@ This crate uses `bindgen`:
 Environment:
 
 - `PKG_CONFIG_PATH`: path for `vips.pc`
+- `LIBVIPS_LIB_DIR` / `LIBVIPS_INCLUDE_DIR`: explicit library/include override
+- `LIBVIPS_STATIC=1`: prefer static linking
 - `LIBVIPS_NO_BINDGEN`: skip bindgen and reuse generated output
+- `LIBVIPS_NO_VENDOR`: ignore vendored headers
 - `BINDGEN_EXTRA_CLANG_ARGS`: extra `-I` or flags
 - `LIBCLANG_PATH`: path to `libclang` if needed
 
