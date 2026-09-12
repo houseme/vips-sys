@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Fixed
+
+- `cargo publish` verify no longer fails when the machine has no libvips:
+  pregenerated bindings compile without headers/library; the build script only
+  panics under feature `bindgen` if headers are missing.
+
 ### Performance
 
 - Cargo `resolver = "3"` (edition 2024).

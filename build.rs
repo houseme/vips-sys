@@ -440,27 +440,52 @@ fn main() {
     println!("cargo:rerun-if-env-changed=VCPKG_DEFAULT_TRIPLET");
     println!("cargo:rerun-if-env-changed=LIBVIPS_VERSION");
 
-    let (include_paths, defines, version) = find_libvips().expect(
-        "vips-sys: libvips not found.\n\
-         - Unix/macOS: install libvips-dev and pkg-config\n\
-         - Windows MSVC: `vcpkg install vips` (set VCPKG_ROOT)\n\
-         - Static: enable `static` feature or LIBVIPS_STATIC=1\n\
-         - Or set LIBVIPS_LIB_DIR / LIBVIPS_INCLUDE_DIR\n\
-         - Or `git submodule update --init` for vendor/libvips",
-    );
+    let found = find_libvips();
+
+    // Pregenerated bindings do not need headers or a present library at
+    // *compile* time. `cargo publish` / docs.rs verify only build the rlib,
+    // so a missing system libvips must not fail the build script here.
+    // Linking a final binary still requires libvips on the linker search path.
+    let (include_paths, defines, version) = match found {
+        Some(triple) => triple,
+        None => {
+            #[cfg(not(feature = "bindgen"))]
+            {
+                println!(
+                    "cargo:warning=vips-sys: libvips not found at build time. \
+                     Using pregenerated bindings; install libvips before linking binaries \
+                     (pkg-config/vcpkg or LIBVIPS_LIB_DIR)."
+                );
+                emit_link(if prefer_static() { "static" } else { "dylib" });
+                (Vec::new(), Vec::new(), None)
+            }
+            #[cfg(feature = "bindgen")]
+            {
+                panic!(
+                    "vips-sys: libvips headers not found (feature `bindgen`).\n\
+                     - Unix/macOS: install libvips-dev and pkg-config\n\
+                     - Windows MSVC: `vcpkg install vips` (set VCPKG_ROOT)\n\
+                     - Or set LIBVIPS_LIB_DIR / LIBVIPS_INCLUDE_DIR\n\
+                     - Or `git submodule update --init` for vendor/libvips"
+                );
+            }
+        }
+    };
 
     if let Some(v) = version.as_deref() {
         apply_version_cfg(v);
     }
 
-    println!(
-        "cargo:include={}",
-        include_paths
-            .iter()
-            .map(|p| p.display().to_string())
-            .collect::<Vec<_>>()
-            .join(":")
-    );
+    if !include_paths.is_empty() {
+        println!(
+            "cargo:include={}",
+            include_paths
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect::<Vec<_>>()
+                .join(":")
+        );
+    }
 
     // Default builds compile `src/bindings/prebuilt.rs` — no clang required.
     #[cfg(feature = "bindgen")]
