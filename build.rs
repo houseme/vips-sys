@@ -271,11 +271,14 @@ fn find_libvips() -> ProbeResult {
         return Some((includes, Vec::new(), None));
     }
 
-    // 4) Vendored headers only
+    // 4) No linkable libvips found.
+    //    Pregenerated bindings still compile (`cargo check` / `clippy` / docs).
+    //    Final binaries need a real library — surface that once, clearly.
     if let Some(include_paths) = vendor_include_paths() {
         println!(
-            "cargo:warning=vips-sys: using vendored libvips headers from vendor/libvips; \
-             install a libvips library, enable static with meson/ninja, or set LIBVIPS_LIB_DIR"
+            "cargo:warning=vips-sys: no libvips library via pkg-config/vcpkg/LIBVIPS_LIB_DIR. \
+             Using vendored headers for compilation only; install libvips (e.g. `brew install vips` \
+             or `apt install libvips-dev`) or set LIBVIPS_LIB_DIR before linking binaries."
         );
         emit_link(if prefer_static() { "static" } else { "dylib" });
         let include_paths = merge_includes(include_paths, glib_include_paths());
