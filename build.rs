@@ -54,11 +54,7 @@ fn vendor_include_paths() -> Option<IncludePaths> {
             paths.push(p);
         }
     }
-    if paths.is_empty() {
-        None
-    } else {
-        Some(paths)
-    }
+    if paths.is_empty() { None } else { Some(paths) }
 }
 
 fn emit_link(kind: &str) {

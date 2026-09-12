@@ -44,11 +44,7 @@ pub mod helpers {
         let c = CString::new(argv0).map_err(|_| -1)?;
         *INIT.get_or_init(|| {
             let rc = unsafe { vips_init(c.as_ptr()) };
-            if rc == 0 {
-                Ok(())
-            } else {
-                Err(rc)
-            }
+            if rc == 0 { Ok(()) } else { Err(rc) }
         })
     }
 
