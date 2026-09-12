@@ -12,7 +12,7 @@ fn env_path(name: &str) -> Option<PathBuf> {
 /// Prefer static linking when `LIBVIPS_STATIC` is set or the `static` feature is
 /// enabled without `dynamic`. Env var wins over Cargo features (sys-crate convention).
 fn prefer_static() -> bool {
-    if let Some(v) = env::var("LIBVIPS_STATIC") {
+    if let Ok(v) = env::var("LIBVIPS_STATIC") {
         let v = v.to_ascii_lowercase();
         return v != "0" && v != "false" && v != "off";
     }
