@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- Vendored libvips as a git submodule at `vendor/libvips` (pinned to v8.18.6).
+- Static linking path: `pkg-config --static` / vcpkg static triplet, optional meson+ninja
+  build from the vendored sources (`static` feature or `LIBVIPS_STATIC=1`).
+- Windows/vcpkg support: honor `VCPKG_ROOT` and `VCPKG_DEFAULT_TRIPLET`, collect include
+  paths for bindgen, document `vcpkg install vips:x64-windows[-static]`.
+- Env overrides: `LIBVIPS_LIB_DIR`, `LIBVIPS_INCLUDE_DIR`, `LIBVIPS_NO_VENDOR`.
+- Export `cargo:include` for dependent sys crates.
+
+### Changed
+
+- CI workflows use `actions/checkout@v7` with `submodules: recursive` and
+  `dtolnay/rust-toolchain@stable`.
+
 ## [0.1.3-beta.2] - 2025-11-02
 
 - Fix: disable doctests for auto-generated bindings to avoid rustdoc failures.
