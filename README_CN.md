@@ -4,14 +4,13 @@
 
 [![Crates.io](https://img.shields.io/crates/v/vips-sys.svg)](https://crates.io/crates/vips-sys)
 [![Rust](https://github.com/houseme/vips-sys/actions/workflows/rust.yml/badge.svg)](https://github.com/houseme/vips-sys/actions/workflows/rust.yml)
-[![Docs](https://img.shields.io/badge/docs-online-blue)](https://houseme.github.io/vips-sys/vips-sys/)
 [![docs.rs](https://docs.rs/vips-sys/badge.svg)](https://docs.rs/vips-sys/)
 [![License](https://img.shields.io/crates/l/vips-sys)](./LICENSE)
 [![Downloads](https://img.shields.io/crates/d/vips-sys)](https://crates.io/crates/vips-sys)
 
 `libvips` 的 Rust 低层 FFI 绑定。追求稳定、精简，可作为更高层安全封装的基础。
 
-- 文档：https://houseme.github.io/vips-sys/vips_sys/
+- 文档：https://docs.rs/vips-sys/
 - 依赖：Rust **1.85+**（edition 2024）；`libvips >= 8.2`（绑定按 **8.18.6** 生成）
 - 目标：构建快、链接可靠、跨平台复用
 

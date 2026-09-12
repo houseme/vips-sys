@@ -4,14 +4,13 @@
 
 [![Crates.io](https://img.shields.io/crates/v/vips-sys.svg)](https://crates.io/crates/vips-sys)
 [![Rust](https://github.com/houseme/vips-sys/actions/workflows/rust.yml/badge.svg)](https://github.com/houseme/vips-sys/actions/workflows/rust.yml)
-[![Docs](https://img.shields.io/badge/docs-online-blue)](https://houseme.github.io/vips-sys/vips-sys/)
 [![docs.rs](https://docs.rs/vips-sys/badge.svg)](https://docs.rs/vips-sys/)
 [![License](https://img.shields.io/crates/l/vips-sys)](./LICENSE)
 [![Downloads](https://img.shields.io/crates/d/vips-sys)](https://crates.io/crates/vips-sys)
 
 Low-level Rust FFI bindings for `libvips`. Designed to be stable, minimal, and a foundation for higher-level wrappers.
 
-- Docs: https://houseme.github.io/vips-sys/vips_sys/
+- Docs: https://docs.rs/vips-sys/
 - Requirement: Rust **1.85+** (edition 2024); `libvips >= 8.2` (bindings generated from **8.18.6**)
 - Goals: fast builds, reliable linking, cross-platform reuse
 
