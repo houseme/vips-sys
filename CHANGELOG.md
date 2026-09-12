@@ -9,27 +9,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
-### Added
-
-- Feature `stub`: link `stub/vips_stub.c` when no system libvips is found so
-  `cargo test --features helpers,stub` works in sandboxes/CI. Real libraries
-  are always preferred.
-- Unit test for `helpers::init` / `version` / `version_string`.
-
-### Fixed
-
-- `cargo publish` verify no longer fails when the machine has no libvips:
-  pregenerated bindings compile without headers/library; the build script only
-  panics under feature `bindgen` if headers are missing.
-
-### Performance
-
-- Cargo `resolver = "3"` (edition 2024).
-- System pkg-config hit no longer merges vendor include paths (fewer FS probes).
-- Skip glib `pkg-config` probes when the `bindgen` feature is off.
-- `helpers::init` returns cached result before allocating `CString`.
-- Build script watches `PKG_CONFIG_PATH` / `LIBVIPS_*` env for correct rebuilds.
-
 ## [0.2.0] - 2026-09-13
 
 ### Performance
@@ -40,9 +19,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Bindgen (feature `bindgen`) allowlists `vips_*` / `Vips*` / `VIPS_*` plus a few
   GObject helpers, uses `use_core()` + `core::ffi`, and fingerprint-caches output
   in `OUT_DIR`.
-- `helpers::init` / `version` / `version_string` use `OnceLock` (no repeated FFI).
+- Cargo `resolver = "3"` (edition 2024).
+- `helpers::init` / `version` / `version_string` use `OnceLock`; `init` returns a
+  cached result before allocating `CString`.
 - `bindgen` is an optional build-dependency (`default-features = false`).
 - `merge_includes` dedups with a `HashSet`.
+- System pkg-config hit no longer merges vendor include paths (fewer FS probes).
+- Skip glib `pkg-config` probes when the `bindgen` feature is off.
+- Build script watches `PKG_CONFIG_PATH` / `LIBVIPS_*` env for correct rebuilds.
 
 ### Added
 
@@ -57,6 +41,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - `cfg(vips_8_16)` and `cfg(vips_8_17)`.
 - `helpers::version_string()`.
 - Feature `bindgen` to regenerate FFI from local headers.
+- Feature `stub`: link `stub/vips_stub.c` when no system libvips is found so
+  `cargo test --features helpers,stub` works in sandboxes/CI. Real libraries
+  are always preferred.
+- Unit test for `helpers::init` / `version` / `version_string`.
+- Multi-OS CI (Linux / macOS / Windows) and tag-driven Release workflow.
 
 ### Changed
 
@@ -66,6 +55,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Bindgen allowlist may omit some previously generated GLib/GObject symbols that
   were not part of the public libvips surface — use feature `bindgen` if you need
   a wider local set.
+- `find_libvips` no longer treats vendored headers alone as a linkable library.
 - CI workflows use `actions/checkout@v7` with `submodules: recursive` and
   `dtolnay/rust-toolchain@stable`.
 - docs.rs metadata enables `helpers` only (not `bindgen`).
@@ -79,6 +69,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - `prefer_static()` matches `env::var` as `Ok` (was incorrectly `Some`).
 - `helpers::version_string`: remove explicit `*` on `OnceLock::get_or_init`
   (`clippy::explicit_auto_deref`, CodeQL alert #3353).
+- `cargo publish` verify no longer fails when the machine has no libvips:
+  pregenerated bindings compile without headers/library; the build script only
+  panics under feature `bindgen` if headers are missing.
+- MSVC: `vcpkg::Config::target_triplet` is called in place (was assigned back
+  and failed to type-check).
+- MSVC: cfg-gate Unix meson/glib helpers so `-D warnings` / `dead_code` passes.
 
 ## [0.1.3-beta.2] - 2025-11-02
 
