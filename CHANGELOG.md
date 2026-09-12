@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- Release workflow hardening: concurrency group per tag, job timeouts,
+  `cargo publish --dry-run` in verify, `--locked` on the real publish.
+
+### Changed
+
+- CI: `softprops/action-gh-release@v3`; changelog extract uses `shell: bash`.
+- Pin optional build-dep `cc` to `1.4.5` (used by feature `stub`).
+
 ## [0.2.0] - 2026-09-13
 
 ### Performance
