@@ -3,7 +3,11 @@
 // Build script for vips-sys (MIT).
 // Links against libvips, which is LGPL-2.1 — see README “License”.
 
-use std::{collections::HashSet, env, fs, path::PathBuf, process::Command};
+use std::{collections::HashSet, env, path::PathBuf};
+#[cfg(any(not(target_env = "msvc"), feature = "bindgen"))]
+use std::fs;
+#[cfg(not(target_env = "msvc"))]
+use std::process::Command;
 
 type IncludePaths = Vec<PathBuf>;
 type Defines = Vec<(String, Option<String>)>;
@@ -76,6 +80,8 @@ fn merge_includes(mut paths: IncludePaths, extra: IncludePaths) -> IncludePaths 
     paths
 }
 
+/// Used by the non-MSVC probe path and by feature `bindgen` (vendor headers).
+#[cfg(any(not(target_env = "msvc"), feature = "bindgen"))]
 fn glib_include_paths() -> IncludePaths {
     let mut paths = Vec::new();
     if let Ok(glib) = pkg_config::Config::new().probe("glib-2.0") {
@@ -87,6 +93,8 @@ fn glib_include_paths() -> IncludePaths {
     paths
 }
 
+/// meson/ninja helpers — Unix static vendor builds only.
+#[cfg(not(target_env = "msvc"))]
 fn which(tool: &str) -> Option<PathBuf> {
     if let Ok(path) = env::var(format!("{}_PATH", tool.to_ascii_uppercase())) {
         let p = PathBuf::from(path);
@@ -103,6 +111,7 @@ fn which(tool: &str) -> Option<PathBuf> {
 }
 
 /// Optional meson-based static build from `vendor/libvips`.
+#[cfg(not(target_env = "msvc"))]
 fn try_build_vendor_static() -> Option<(IncludePaths, PathBuf)> {
     let root = vendor_root()?;
     let out_dir = PathBuf::from(env::var_os("OUT_DIR")?).join("libvips-build");
@@ -162,6 +171,7 @@ fn try_build_vendor_static() -> Option<(IncludePaths, PathBuf)> {
     }
 }
 
+#[cfg(not(target_env = "msvc"))]
 fn static_install_includes(prefix: &std::path::Path) -> IncludePaths {
     let mut includes = vec![prefix.join("include")];
     includes = merge_includes(includes, vendor_include_paths().unwrap_or_default());
