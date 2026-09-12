@@ -1,9 +1,4 @@
-use std::{
-    collections::HashSet,
-    env, fs,
-    path::PathBuf,
-    process::Command,
-};
+use std::{collections::HashSet, env, fs, path::PathBuf, process::Command};
 
 type IncludePaths = Vec<PathBuf>;
 type Defines = Vec<(String, Option<String>)>;
@@ -11,6 +6,7 @@ type VersionOpt = Option<String>;
 type ProbeResult = Option<(IncludePaths, Defines, VersionOpt)>;
 
 /// Bump when bindgen options / allowlist change so cached bindings are invalidated.
+#[cfg(feature = "bindgen")]
 const BINDINGS_SCHEMA: &str = "vips-sys-bindings-v2";
 
 fn env_path(name: &str) -> Option<PathBuf> {
@@ -258,7 +254,10 @@ fn find_libvips() -> ProbeResult {
         cfg.statik(false);
     }
     if let Ok(lib) = cfg.atleast_version("8.2").probe("vips") {
-        let include_paths = merge_includes(lib.include_paths, vendor_include_paths().unwrap_or_default());
+        let include_paths = merge_includes(
+            lib.include_paths,
+            vendor_include_paths().unwrap_or_default(),
+        );
         return Some((include_paths, Vec::new(), Some(lib.version.clone())));
     }
 
@@ -285,33 +284,11 @@ fn find_libvips() -> ProbeResult {
     None
 }
 
-/// Stable fingerprint of inputs that affect generated bindings.
-fn bindings_fingerprint(include_paths: &[PathBuf], version: Option<&str>) -> String {
-    let mut acc = String::with_capacity(256);
-    acc.push_str(BINDINGS_SCHEMA);
-    acc.push('\n');
-    acc.push_str(version.unwrap_or("unknown"));
-    acc.push('\n');
-    for p in include_paths {
-        acc.push_str(&p.display().to_string());
-        acc.push('\n');
-    }
-    // content of wrapper.h
-    if let Ok(w) = fs::read_to_string("wrapper.h") {
-        acc.push_str(&w);
-    }
-    // simple non-crypto hash (FNV-1a 64)
-    let mut hash: u64 = 0xcbf29ce484222325;
-    for b in acc.as_bytes() {
-        hash ^= *b as u64;
-        hash = hash.wrapping_mul(0x100000001b3);
-    }
-    format!("{hash:016x}")
-}
-
+/// Generate bindings with bindgen (feature `bindgen` only).
+/// Default builds use `src/bindings/prebuilt.rs` and skip this path entirely.
+#[cfg(feature = "bindgen")]
 fn generate_bindings(include_paths: &[PathBuf], defines: &Defines, version: Option<&str>) {
     println!("cargo:rerun-if-changed=wrapper.h");
-    println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=LIBVIPS_NO_BINDGEN");
     println!("cargo:rerun-if-env-changed=LIBVIPS_LIB_DIR");
     println!("cargo:rerun-if-env-changed=LIBVIPS_INCLUDE_DIR");
@@ -383,6 +360,35 @@ fn generate_bindings(include_paths: &[PathBuf], defines: &Defines, version: Opti
         .write_to_file(&binding_rs)
         .expect("Couldn't write bindings");
     let _ = fs::write(&stamp, &fp);
+
+    // Convenience for maintainers: print where to copy when refreshing prebuilt.rs
+    println!(
+        "cargo:warning=vips-sys: wrote {} — copy to src/bindings/prebuilt.rs to refresh defaults",
+        binding_rs.display()
+    );
+}
+
+/// Fingerprint helper is only needed when regenerating bindings.
+#[cfg(feature = "bindgen")]
+fn bindings_fingerprint(include_paths: &[PathBuf], version: Option<&str>) -> String {
+    let mut acc = String::with_capacity(256);
+    acc.push_str(BINDINGS_SCHEMA);
+    acc.push('\n');
+    acc.push_str(version.unwrap_or("unknown"));
+    acc.push('\n');
+    for p in include_paths {
+        acc.push_str(&p.display().to_string());
+        acc.push('\n');
+    }
+    if let Ok(w) = fs::read_to_string("wrapper.h") {
+        acc.push_str(&w);
+    }
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for b in acc.as_bytes() {
+        hash ^= *b as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    format!("{hash:016x}")
 }
 
 fn apply_version_cfg(version: &str) {
@@ -401,6 +407,7 @@ fn apply_version_cfg(version: &str) {
 }
 
 fn main() {
+    println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=LIBVIPS_NO_VENDOR");
     println!("cargo:rerun-if-env-changed=VCPKG_ROOT");
     println!("cargo:rerun-if-env-changed=VCPKG_DEFAULT_TRIPLET");
@@ -428,5 +435,11 @@ fn main() {
             .join(":")
     );
 
+    // Default builds compile `src/bindings/prebuilt.rs` — no clang required.
+    #[cfg(feature = "bindgen")]
     generate_bindings(&include_paths, &defines, version.as_deref());
+
+    // Silence unused-parameter warnings when bindgen is disabled.
+    #[cfg(not(feature = "bindgen"))]
+    let _ = (&include_paths, &defines);
 }

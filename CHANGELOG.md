@@ -11,30 +11,43 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Performance
 
-- Bindgen allowlist limited to `vips_*` / `Vips*` / `VIPS_*` plus the few GObject
-  helpers (`g_object_unref`, `g_signal_connect_data`, `g_free`, …). Avoids parsing
-  and emitting the full GObject/GLib surface on every build.
-- Bindings are fingerprint-cached in `OUT_DIR` (`binding.fingerprint`); rebuilds
-  skip clang/bindgen when include paths, version, and `wrapper.h` are unchanged.
-- `use_core()` + `core::ffi` ctypes reduce generated-code noise.
-- `helpers::version` / `version_string` / `init` use `OnceLock` to avoid repeated FFI.
-- `bindgen` build-dep uses `default-features = false` (runtime + logging only).
+- **Pregenerated bindings** (`src/bindings/prebuilt.rs`) are used by default: no
+  clang/bindgen required for normal `cargo build`. Enable feature `bindgen` only
+  when refreshing bindings against local headers.
+- Bindgen (feature `bindgen`) allowlists `vips_*` / `Vips*` / `VIPS_*` plus a few
+  GObject helpers, uses `use_core()` + `core::ffi`, and fingerprint-caches output
+  in `OUT_DIR`.
+- `helpers::init` / `version` / `version_string` use `OnceLock` (no repeated FFI).
+- `bindgen` is an optional build-dependency (`default-features = false`).
+- `merge_includes` dedups with a `HashSet`.
 
 ### Added
 
-- Vendored libvips as a git submodule at `vendor/libvips` (pinned to v8.18.6).
-- Static linking path: `pkg-config --static` / vcpkg static triplet, optional meson+ninja
-  build from the vendored sources (`static` feature or `LIBVIPS_STATIC=1`).
-- Windows/vcpkg support: honor `VCPKG_ROOT` and `VCPKG_DEFAULT_TRIPLET`, collect include
-  paths for bindgen, document `vcpkg install vips:x64-windows[-static]`.
-- Env overrides: `LIBVIPS_LIB_DIR`, `LIBVIPS_INCLUDE_DIR`, `LIBVIPS_NO_VENDOR`.
+- Vendored libvips as a git submodule at `vendor/libvips` (pinned to **v8.18.6**).
+- Static linking: `pkg-config --static` / vcpkg static triplet; optional meson+ninja
+  build from vendored sources (`static` feature or `LIBVIPS_STATIC=1`).
+- Windows/vcpkg: `VCPKG_ROOT`, `VCPKG_DEFAULT_TRIPLET`; document
+  `vcpkg install vips:x64-windows[-static]`.
+- Env overrides: `LIBVIPS_LIB_DIR`, `LIBVIPS_INCLUDE_DIR`, `LIBVIPS_NO_VENDOR`,
+  `LIBVIPS_STATIC` (`0`/`false`/`off` disable).
 - Export `cargo:include` for dependent sys crates.
-- `cfg(vips_8_16)` alongside `cfg(vips_8_17)`.
+- `cfg(vips_8_16)` and `cfg(vips_8_17)`.
+- `helpers::version_string()`.
+- Feature `bindgen` to regenerate FFI from local headers.
 
 ### Changed
 
+- Default compile path no longer runs bindgen; `src/bindings/prebuilt.rs` is
+  `include!`d unless feature `bindgen` is enabled.
 - CI workflows use `actions/checkout@v7` with `submodules: recursive` and
   `dtolnay/rust-toolchain@stable`.
+- docs.rs metadata enables `helpers` only (not `bindgen`).
+- Removed `generate.sh` — use `cargo build --features bindgen` instead.
+  `wrapper.h` is kept as the bindgen entry header.
+
+### Fixed
+
+- `prefer_static()` matches `env::var` as `Ok` (was incorrectly `Some`).
 
 ## [0.1.3-beta.2] - 2025-11-02
 

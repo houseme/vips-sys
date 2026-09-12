@@ -12,72 +12,114 @@
 Low-level Rust FFI bindings for `libvips`. Designed to be stable, minimal, and a foundation for higher-level wrappers.
 
 - Docs: https://houseme.github.io/vips-sys/vips_sys/
-- Requirement: `libvips >= 8.2` (validated on `8.17.2`)
-- Goals: reliable builds, cross-platform reuse, in-sync with upstream
+- Requirement: `libvips >= 8.2` (bindings generated from **8.18.6**)
+- Goals: fast builds, reliable linking, cross-platform reuse
+
+## Highlights
+
+| | Default | Feature `bindgen` |
+|--|---------|-------------------|
+| Bindings | Pregenerated `src/bindings/prebuilt.rs` | Live bindgen via clang |
+| Needs libclang? | **No** | Yes |
+| Typical `cargo build` | Seconds | Slower (first time) |
+| Use when | Normal development / CI | Updating API surface / new libvips |
+
+Normal builds **do not run bindgen**. You only need a libvips **library** to link against.
 
 ## Installation
 
-- macOS
-    - `brew install vips pkg-config`
-    - Apple Silicon: ensure `PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig`
-- Debian/Ubuntu
-    - `sudo apt-get install -y libvips-dev pkg-config`
-- Windows (MSVC)
-    - Install [vcpkg](https://github.com/microsoft/vcpkg), then `vcpkg install vips:x64-windows`
-      (or `vips:x64-windows-static` for static)
-    - Set `VCPKG_ROOT` so the `vcpkg` crate can locate the installed tree
-    - Optional: `set VCPKG_DEFAULT_TRIPLET=x64-windows-static` when using the `static` feature
-
-Verify `pkg-config --cflags --libs vips` works (MSVC links via `vcpkg`).
-
-### Vendored libvips (submodule)
-
-This crate vendors [libvips](https://github.com/libvips/libvips) as a git submodule at
-`vendor/libvips` (pinned to `v8.18.6`), following common `*-sys` crate practice
-(see [kornel.ski/rust-sys-crate](https://kornel.ski/rust-sys-crate)):
+### macOS
 
 ```bash
-git clone --recurse-submodules <this-repo>
-# or after clone:
-git submodule update --init --recursive
+brew install vips pkg-config
+# Apple Silicon:
+export PKG_CONFIG_PATH=/opt/homebrew/lib/pkgconfig
 ```
 
-Build resolution order:
+### Debian / Ubuntu
 
-1. `LIBVIPS_LIB_DIR` / `LIBVIPS_INCLUDE_DIR` (and optional `LIBVIPS_STATIC=1`)
-2. System library via `pkg-config` (Linux/BSD/macOS) or `vcpkg` (MSVC)
-3. When `static` is requested: attempt a meson/ninja static build from `vendor/libvips`
-4. Vendored headers under `vendor/libvips` (linking still requires a libvips library)
+```bash
+sudo apt-get install -y libvips-dev pkg-config
+```
 
-## Features
+### Windows (MSVC)
 
-- `static`: prefer static linking (also `LIBVIPS_STATIC=1`; env wins over features)
-- `dynamic`: prefer dynamic linking (default)
-- `helpers`: minimal helpers for init/shutdown/version
+```bat
+vcpkg install vips:x64-windows
+set VCPKG_ROOT=C:\path\to\vcpkg
+```
+
+Static: `vcpkg install vips:x64-windows-static` and `set VCPKG_DEFAULT_TRIPLET=x64-windows-static`.
+
+Verify: `pkg-config --cflags --libs vips` (MSVC uses vcpkg instead).
+
+## Cargo
+
+```toml
+[dependencies]
+vips-sys = { version = "0.1.3-beta.2", features = ["helpers"] }
+```
+
+### Features
+
+| Feature | Default | Description |
+|---------|---------|-------------|
+| *(none)* | ✓ | Pregenerated bindings + link probe |
+| `helpers` | | `init` / `shutdown` / `version` / `version_string` (cached) |
+| `static` | | Prefer static linking (`LIBVIPS_STATIC=1` overrides) |
+| `dynamic` | | Prefer dynamic linking |
+| `bindgen` | | Regenerate bindings with clang against local headers |
 
 ### Static linking
 
 ```toml
-[dependencies]
 vips-sys = { version = "0.1.3-beta.2", features = ["static"] }
 ```
-
-or
 
 ```bash
 LIBVIPS_STATIC=1 cargo build
 ```
 
-Resolution for static builds:
+Resolution order:
 
-1. `pkg-config --static` / vcpkg static triplet when a static `libvips` is already installed
-2. Meson build of `vendor/libvips` into `OUT_DIR` when `meson` + `ninja` are on `PATH`
+1. `pkg-config --static` / vcpkg static triplet if a static libvips is installed
+2. Meson + ninja build of `vendor/libvips` into `OUT_DIR` (if tools are on `PATH`)
 3. Clear error otherwise
+
+### Vendored libvips (submodule)
+
+`vendor/libvips` tracks [libvips](https://github.com/libvips/libvips) at **v8.18.6**
+(see [rust-sys-crate](https://kornel.ski/rust-sys-crate)):
+
+```bash
+git clone --recurse-submodules <this-repo>
+# or:
+git submodule update --init --recursive
+```
+
+Link / header resolution:
+
+1. `LIBVIPS_LIB_DIR` / `LIBVIPS_INCLUDE_DIR` (optional `LIBVIPS_STATIC=1`)
+2. System library via `pkg-config` (Unix) or `vcpkg` (MSVC)
+3. Static vendor build when `static` is requested
+4. Vendored headers for include paths (still need a library to link)
+
+## Refreshing pregenerated bindings
+
+```bash
+# Requires: libclang, glib headers, and vips headers (system or vendor submodule)
+cargo build --features bindgen
+# build.rs prints the OUT_DIR path — copy it over:
+cp target/debug/build/vips-sys-*/out/binding.rs src/bindings/prebuilt.rs
+```
+
+`wrapper.h` is the single bindgen entry point and is **kept** in the repo.
+`generate.sh` was removed in favor of the `bindgen` feature.
 
 Build-time exports:
 
-- `LIBVIPS_VERSION`: detected `libvips` version string
-- `cfg(vips_8_17)`: enabled when version `>= 8.17`
+- `LIBVIPS_VERSION` — detected version string (from pkg-config when available)
+- `cfg(vips_8_16)` / `cfg(vips_8_17)` — when version is new enough
 
 ## Example (`helpers`)
 
@@ -87,75 +129,31 @@ use vips_sys::helpers;
 fn main() {
     helpers::init("vips-sys-example").expect("vips init failed");
     let (a, b, c) = helpers::version();
-    println!("libvips version: {}.{}.{}", a, b, c);
+    println!("libvips {}.{}.{} ({})", a, b, c, helpers::version_string());
     helpers::shutdown();
 }
 ```
 
-Cargo:
+## Environment variables
 
-```toml
-[dependencies]
-vips-sys = { version = "0.1.3-beta.2", features = ["helpers"] }
-```
-
-## Build notes
-
-This crate uses `bindgen`:
-
-- Include paths from `pkg-config` and pass to `clang`
-- **Allowlist** limited to `vips_*` / `Vips*` / `VIPS_*` (+ a few GObject helpers)
-  so unused GLib surface is not generated — faster builds, smaller rlib
-- Bindings are **fingerprint-cached** in `OUT_DIR`; unchanged inputs skip clang
-- `layout_tests` disabled, `use_core()` + `core::ffi` ctypes
-- Comments disabled to avoid doctest noise
-
-Performance tips:
-
-- Install a system `libvips` (pkg-config path) — avoids meson builds entirely
-- Second `cargo build` after a clean `OUT_DIR` change is much cheaper thanks to the cache
-- Force regeneration by touching `wrapper.h` or setting a new `LIBVIPS_INCLUDE_DIR`
-
-Environment:
-
-- `PKG_CONFIG_PATH`: path for `vips.pc`
-- `LIBVIPS_LIB_DIR` / `LIBVIPS_INCLUDE_DIR`: explicit library/include override
-- `LIBVIPS_STATIC=1`: prefer static linking (`0`/`false` disables)
-- `LIBVIPS_NO_BINDGEN`: skip bindgen and reuse generated output
-- `LIBVIPS_NO_VENDOR`: ignore vendored headers
-- `VCPKG_ROOT` / `VCPKG_DEFAULT_TRIPLET`: Windows vcpkg discovery
-- `BINDGEN_EXTRA_CLANG_ARGS`: extra `-I` or flags
-- `LIBCLANG_PATH`: path to `libclang` if needed
-
-## Windows notes (MSVC)
-
-```bat
-git clone https://github.com/microsoft/vcpkg %VCPKG_ROOT%
-%VCPKG_ROOT%\vcpkg install vips:x64-windows
-set VCPKG_ROOT=%VCPKG_ROOT%
-cargo build
-```
-
-Static:
-
-```bat
-vcpkg install vips:x64-windows-static
-set VCPKG_DEFAULT_TRIPLET=x64-windows-static
-set LIBVIPS_STATIC=1
-cargo build --features static
-```
+| Variable | Purpose |
+|----------|---------|
+| `PKG_CONFIG_PATH` | Find `vips.pc` |
+| `LIBVIPS_LIB_DIR` / `LIBVIPS_INCLUDE_DIR` | Explicit library / headers |
+| `LIBVIPS_STATIC` | `1` prefer static; `0`/`false`/`off` disable |
+| `LIBVIPS_NO_VENDOR` | Ignore `vendor/libvips` |
+| `LIBVIPS_NO_BINDGEN` | With feature `bindgen`, skip generation |
+| `LIBVIPS_VERSION` | Override version string for cfg |
+| `VCPKG_ROOT` / `VCPKG_DEFAULT_TRIPLET` | Windows vcpkg |
+| `BINDGEN_EXTRA_CLANG_ARGS` | Extra clang flags (bindgen feature) |
+| `LIBCLANG_PATH` | libclang location (bindgen feature) |
 
 ## Troubleshooting
 
-- Not found `vips`:
-    - Install `libvips` and `pkg-config` (or `vcpkg` on Windows)
-    - Check `PKG_CONFIG_PATH` / `VCPKG_ROOT`
-- Bindgen failed:
-    - Set `LIBCLANG_PATH`, or add include dirs via `BINDGEN_EXTRA_CLANG_ARGS`
-- Static linking on macOS:
-    - Prefer dynamic linking due to Homebrew constraints; use vendor + meson for static
-- Windows bindgen cannot find headers:
-    - Ensure `VCPKG_ROOT` is set so include paths are discovered
+- **link error, library not found** — install libvips (`libvips-dev` / `vcpkg install vips`)
+- **bindgen feature fails** — install `libclang`, glib headers, and vips headers
+- **static on macOS** — prefer dynamic (Homebrew); use vendor + meson for true static
+- **Windows headers** — set `VCPKG_ROOT` so include paths resolve
 
 ## License
 

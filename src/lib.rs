@@ -1,12 +1,23 @@
 //! Low-level FFI bindings to `libvips`.
 //!
-//! This crate is intentionally thin: almost all items are re-exports of
-//! bindgen output. Prefer the higher-level `vips` crate unless you need
-//! direct C API access.
+//! By default this crate uses **pregenerated** bindings (`src/bindings/prebuilt.rs`)
+//! so consumers do not need clang/bindgen at build time.
+//!
+//! Enable the `bindgen` feature to regenerate bindings against the headers found
+//! on the machine (system libvips or `vendor/libvips`).
 
 #![allow(non_upper_case_globals, non_camel_case_types, non_snake_case)]
 #![allow(clippy::missing_safety_doc)]
 
+/// Pregenerated bindings (default). Shared ABI for libvips 8.2+.
+#[cfg(not(feature = "bindgen"))]
+#[allow(clippy::all)]
+mod ffi {
+    include!("bindings/prebuilt.rs");
+}
+
+/// Live bindgen output from `OUT_DIR` (feature `bindgen`).
+#[cfg(feature = "bindgen")]
 #[allow(clippy::all)]
 mod ffi {
     include!(concat!(env!("OUT_DIR"), "/binding.rs"));
