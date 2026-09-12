@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Added
 
+- `Release` workflow supports manual `workflow_dispatch` with a `tag` input (in addition to tag push).
 - Release workflow hardening: concurrency group per tag, job timeouts,
   `cargo publish --dry-run` in verify, `--locked` on the real publish.
 
