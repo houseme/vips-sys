@@ -12,7 +12,7 @@
 `libvips` 的 Rust 低层 FFI 绑定。追求稳定、精简，可作为更高层安全封装的基础。
 
 - 文档：https://houseme.github.io/vips-sys/vips_sys/
-- 依赖：`libvips >= 8.2`（绑定按 **8.18.6** 生成）
+- 依赖：Rust **1.85+**（edition 2024）；`libvips >= 8.2`（绑定按 **8.18.6** 生成）
 - 目标：构建快、链接可靠、跨平台复用
 
 ## 核心特性
@@ -57,7 +57,7 @@ set VCPKG_ROOT=C:\path\to\vcpkg
 
 ```toml
 [dependencies]
-vips-sys = { version = "0.1.3-beta.2", features = ["helpers"] }
+vips-sys = { version = "0.2.0", features = ["helpers"] }
 ```
 
 ### Features
@@ -73,7 +73,7 @@ vips-sys = { version = "0.1.3-beta.2", features = ["helpers"] }
 ### 静态链接
 
 ```toml
-vips-sys = { version = "0.1.3-beta.2", features = ["static"] }
+vips-sys = { version = "0.2.0", features = ["static"] }
 ```
 
 ```bash

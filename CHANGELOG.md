@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-13
+
 ### Performance
 
 - **Pregenerated bindings** (`src/bindings/prebuilt.rs`) are used by default: no
@@ -37,8 +39,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ### Changed
 
+- **Rust edition 2024** (requires **rustc 1.85+**).
 - Default compile path no longer runs bindgen; `src/bindings/prebuilt.rs` is
   `include!`d unless feature `bindgen` is enabled.
+- Bindgen allowlist may omit some previously generated GLib/GObject symbols that
+  were not part of the public libvips surface — use feature `bindgen` if you need
+  a wider local set.
 - CI workflows use `actions/checkout@v7` with `submodules: recursive` and
   `dtolnay/rust-toolchain@stable`.
 - docs.rs metadata enables `helpers` only (not `bindgen`).
@@ -49,6 +55,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Fixed
 
 - `prefer_static()` matches `env::var` as `Ok` (was incorrectly `Some`).
+- `helpers::version_string`: remove explicit `*` on `OnceLock::get_or_init`
+  (`clippy::explicit_auto_deref`, CodeQL alert #3353).
 
 ## [0.1.3-beta.2] - 2025-11-02
 

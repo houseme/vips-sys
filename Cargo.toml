@@ -1,6 +1,6 @@
 [package]
 name = "vips-sys"
-version = "0.1.3-beta.2"
+version = "0.2.0"
 authors = ["elbaro <elbaro@github>", "houseme <housemecn@gmail.com"]
 edition = "2024"
 description = "libvips bindings for Rust"

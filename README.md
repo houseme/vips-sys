@@ -12,7 +12,7 @@
 Low-level Rust FFI bindings for `libvips`. Designed to be stable, minimal, and a foundation for higher-level wrappers.
 
 - Docs: https://houseme.github.io/vips-sys/vips_sys/
-- Requirement: `libvips >= 8.2` (bindings generated from **8.18.6**)
+- Requirement: Rust **1.85+** (edition 2024); `libvips >= 8.2` (bindings generated from **8.18.6**)
 - Goals: fast builds, reliable linking, cross-platform reuse
 
 ## Highlights
@@ -57,7 +57,7 @@ Verify: `pkg-config --cflags --libs vips` (MSVC uses vcpkg instead).
 
 ```toml
 [dependencies]
-vips-sys = { version = "0.1.3-beta.2", features = ["helpers"] }
+vips-sys = { version = "0.2.0", features = ["helpers"] }
 ```
 
 ### Features
@@ -73,7 +73,7 @@ vips-sys = { version = "0.1.3-beta.2", features = ["helpers"] }
 ### Static linking
 
 ```toml
-vips-sys = { version = "0.1.3-beta.2", features = ["static"] }
+vips-sys = { version = "0.2.0", features = ["static"] }
 ```
 
 ```bash
