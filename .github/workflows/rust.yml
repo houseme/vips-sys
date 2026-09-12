@@ -69,3 +69,26 @@ jobs:
       - name: cargo build (release)
         if: matrix.link_tests
         run: cargo build --release --features helpers
+
+  # Prove `cargo test` works with no system libvips (feature `stub`).
+  test-stub:
+    name: no-system-libvips (stub)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        # vendor/ not required for the stub path
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Ensure libvips is absent
+        run: |
+          if pkg-config --exists vips 2>/dev/null; then
+            echo "unexpected system vips; this job must run without it" >&2
+            exit 1
+          fi
+
+      - name: cargo test with stub
+        run: cargo test --features helpers,stub
+
+      - name: cargo clippy with stub
+        run: cargo clippy --features helpers,stub -- -D warnings

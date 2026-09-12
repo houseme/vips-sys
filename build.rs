@@ -271,21 +271,8 @@ fn find_libvips() -> ProbeResult {
         return Some((includes, Vec::new(), None));
     }
 
-    // 4) No linkable libvips found.
-    //    Pregenerated bindings still compile (`cargo check` / `clippy` / docs).
-    //    Final binaries need a real library — surface that once, clearly.
-    if let Some(include_paths) = vendor_include_paths() {
-        println!(
-            "cargo:warning=vips-sys: no libvips library via pkg-config/vcpkg/LIBVIPS_LIB_DIR. \
-             Using vendored headers for compilation only; install libvips (e.g. `brew install vips` \
-             or `apt install libvips-dev`) or set LIBVIPS_LIB_DIR before linking binaries."
-        );
-        emit_link(if prefer_static() { "static" } else { "dylib" });
-        #[cfg(feature = "bindgen")]
-        let include_paths = merge_includes(include_paths, glib_include_paths());
-        return Some((include_paths, Vec::new(), None));
-    }
-
+    // 4) No linkable library. Headers alone are not enough to satisfy the linker.
+    //    Return None so main() can pick stub / warn / bindgen-only as appropriate.
     None
 }
 
@@ -439,35 +426,58 @@ fn main() {
     println!("cargo:rerun-if-env-changed=VCPKG_ROOT");
     println!("cargo:rerun-if-env-changed=VCPKG_DEFAULT_TRIPLET");
     println!("cargo:rerun-if-env-changed=LIBVIPS_VERSION");
+    println!("cargo:rerun-if-changed=stub/vips_stub.c");
 
     let found = find_libvips();
 
-    // Pregenerated bindings do not need headers or a present library at
-    // *compile* time. `cargo publish` / docs.rs verify only build the rlib,
-    // so a missing system libvips must not fail the build script here.
-    // Linking a final binary still requires libvips on the linker search path.
     let (include_paths, defines, version) = match found {
         Some(triple) => triple,
         None => {
-            #[cfg(not(feature = "bindgen"))]
+            // Prefer a real library whenever find_libvips succeeds; only fall
+            // through here when nothing is installed.
+            #[cfg(feature = "stub")]
             {
                 println!(
-                    "cargo:warning=vips-sys: libvips not found at build time. \
-                     Using pregenerated bindings; install libvips before linking binaries \
-                     (pkg-config/vcpkg or LIBVIPS_LIB_DIR)."
+                    "cargo:warning=vips-sys: no libvips library; linking stub/vips_stub.c \
+                     (feature `stub`). Suitable for unit tests only — not for production."
                 );
-                emit_link(if prefer_static() { "static" } else { "dylib" });
-                (Vec::new(), Vec::new(), None)
+                cc::Build::new()
+                    .file("stub/vips_stub.c")
+                    .warnings(false)
+                    .compile("vips");
             }
+            #[cfg(not(feature = "stub"))]
+            {
+                #[cfg(not(feature = "bindgen"))]
+                {
+                    println!(
+                        "cargo:warning=vips-sys: libvips not found at build time. \
+                         Using pregenerated bindings; install libvips before linking binaries \
+                         (pkg-config/vcpkg or LIBVIPS_LIB_DIR), or enable feature `stub` for tests."
+                    );
+                    emit_link(if prefer_static() { "static" } else { "dylib" });
+                }
+            }
+
             #[cfg(feature = "bindgen")]
             {
-                panic!(
-                    "vips-sys: libvips headers not found (feature `bindgen`).\n\
-                     - Unix/macOS: install libvips-dev and pkg-config\n\
-                     - Windows MSVC: `vcpkg install vips` (set VCPKG_ROOT)\n\
-                     - Or set LIBVIPS_LIB_DIR / LIBVIPS_INCLUDE_DIR\n\
-                     - Or `git submodule update --init` for vendor/libvips"
-                );
+                // Headers for bindgen: vendor tree or nothing.
+                let mut inc = vendor_include_paths().unwrap_or_default();
+                if inc.is_empty() {
+                    panic!(
+                        "vips-sys: libvips headers not found (feature `bindgen`).\n\
+                         - Unix/macOS: install libvips-dev and pkg-config\n\
+                         - Windows MSVC: `vcpkg install vips` (set VCPKG_ROOT)\n\
+                         - Or set LIBVIPS_LIB_DIR / LIBVIPS_INCLUDE_DIR\n\
+                         - Or `git submodule update --init` for vendor/libvips"
+                    );
+                }
+                inc = merge_includes(inc, glib_include_paths());
+                (inc, Vec::new(), None)
+            }
+            #[cfg(not(feature = "bindgen"))]
+            {
+                (Vec::new(), Vec::new(), None)
             }
         }
     };

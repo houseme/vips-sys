@@ -69,6 +69,16 @@ vips-sys = { version = "0.2.0", features = ["helpers"] }
 | `static` | | 优先静态链接（可用 `LIBVIPS_STATIC=1` 覆盖） |
 | `dynamic` | | 优先动态链接 |
 | `bindgen` | | 用 clang 按本机头文件重新生成绑定 |
+| `stub` | | 无系统库时链接 `stub/vips_stub.c`（**仅测试**） |
+
+### 无系统 libvips 时跑测试
+
+```bash
+cargo test --features helpers,stub
+```
+
+找不到真实库时，`stub` 会编译最小 C 桩（`vips_init` / `vips_version` 等）以便链接单测。
+**有真实库时永远优先用真实库**；生产二进制不要带 `stub` 构建。
 
 ### 静态链接
 

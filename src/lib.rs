@@ -80,3 +80,18 @@ pub mod helpers {
         })
     }
 }
+
+#[cfg(all(test, feature = "helpers"))]
+mod tests {
+    use super::helpers;
+
+    #[test]
+    fn init_and_version() {
+        helpers::init("vips-sys-test").expect("vips_init");
+        let (maj, min, mic) = helpers::version();
+        assert!(maj >= 0 && min >= 0 && mic >= 0);
+        assert!(!helpers::version_string().is_empty());
+        // Cached: second call is free and consistent.
+        assert_eq!(helpers::version(), (maj, min, mic));
+    }
+}

@@ -22,6 +22,9 @@ default = []
 # Regenerate FFI bindings with clang/bindgen against local headers.
 # Default builds use the pregenerated file in src/bindings/prebuilt.rs.
 bindgen = ["dep:bindgen"]
+# Link a tiny C stub when no system libvips is found (for `cargo test` in CI
+# or sandboxes). Never preferred when a real library is available.
+stub = ["dep:cc"]
 static = []
 dynamic = []
 helpers = []
@@ -29,6 +32,7 @@ helpers = []
 [build-dependencies]
 pkg-config = "0.3.34"
 bindgen = { version = "0.73.2", optional = true, default-features = false, features = ["runtime", "logging"] }
+cc = { version = "1.2", optional = true }
 
 [target.'cfg(target_env = "msvc")'.build-dependencies]
 vcpkg = { version = "0.2.15" }

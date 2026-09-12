@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Added
+
+- Feature `stub`: link `stub/vips_stub.c` when no system libvips is found so
+  `cargo test --features helpers,stub` works in sandboxes/CI. Real libraries
+  are always preferred.
+- Unit test for `helpers::init` / `version` / `version_string`.
+
 ### Fixed
 
 - `cargo publish` verify no longer fails when the machine has no libvips:

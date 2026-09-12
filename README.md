@@ -69,6 +69,18 @@ vips-sys = { version = "0.2.0", features = ["helpers"] }
 | `static` | | Prefer static linking (`LIBVIPS_STATIC=1` overrides) |
 | `dynamic` | | Prefer dynamic linking |
 | `bindgen` | | Regenerate bindings with clang against local headers |
+| `stub` | | Link `stub/vips_stub.c` when no system libvips is found (**tests only**) |
+
+### Tests without a system libvips
+
+```bash
+cargo test --features helpers,stub
+```
+
+If `pkg-config`/vcpkg/`LIBVIPS_LIB_DIR` cannot find a real library, `stub` builds a
+tiny C stand-in (`vips_init` / `vips_version` / …) so unit tests can link. When a
+real library **is** present it is always preferred — never ship production binaries
+built with `stub`.
 
 ### Static linking
 
