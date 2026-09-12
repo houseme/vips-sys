@@ -3,11 +3,11 @@
 // Build script for vips-sys (MIT).
 // Links against libvips, which is LGPL-2.1 — see README “License”.
 
-use std::{collections::HashSet, env, path::PathBuf};
 #[cfg(any(not(target_env = "msvc"), feature = "bindgen"))]
 use std::fs;
 #[cfg(not(target_env = "msvc"))]
 use std::process::Command;
+use std::{collections::HashSet, env, path::PathBuf};
 
 type IncludePaths = Vec<PathBuf>;
 type Defines = Vec<(String, Option<String>)>;
@@ -194,8 +194,8 @@ fn find_libvips() -> ProbeResult {
     // `target_triplet` takes `&mut self` and returns `&mut Config` — do not assign back.
     let mut config = vcpkg::Config::new();
     if prefer_static() {
-        let triplet = env::var("VCPKG_DEFAULT_TRIPLET")
-            .unwrap_or_else(|_| "x64-windows-static".to_string());
+        let triplet =
+            env::var("VCPKG_DEFAULT_TRIPLET").unwrap_or_else(|_| "x64-windows-static".to_string());
         config.target_triplet(&triplet);
     }
     match config.find_package("vips") {

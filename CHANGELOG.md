@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 - CI: `softprops/action-gh-release@v3`; changelog extract uses `shell: bash`.
 - Pin optional build-dep `cc` to `1.4.5` (used by feature `stub`).
+- Apply `cargo fmt` to `build.rs` (import order and line wrapping).
 
 ## [0.2.0] - 2026-09-13
 
