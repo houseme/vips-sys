@@ -3,6 +3,7 @@ name = "vips-sys"
 version = "0.2.0"
 authors = ["elbaro <elbaro@github>", "houseme <housemecn@gmail.com"]
 edition = "2024"
+resolver = "3"
 description = "libvips bindings for Rust"
 documentation = "https://houseme.github.io/vips-sys/vips_sys/"
 repository = "https://github.com/houseme/vips-sys"

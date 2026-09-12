@@ -241,12 +241,16 @@ fn find_libvips() -> ProbeResult {
             .map(|p| vec![p])
             .or_else(vendor_include_paths)
             .unwrap_or_default();
+        // glib headers are only required when bindgen parses vendor/system headers.
+        #[cfg(feature = "bindgen")]
         let include_paths = merge_includes(include_paths, glib_include_paths());
         let version = env::var("LIBVIPS_VERSION").ok();
         return Some((include_paths, Vec::new(), version));
     }
 
-    // 2) System library via pkg-config (fast path — covers include dirs for glib too)
+    // 2) System library via pkg-config (fast path)
+    //    Do not merge vendor headers here: system includes match the linked
+    //    library, and skipping FS probes keeps the build script cheap.
     let mut cfg = pkg_config::Config::new();
     if prefer_static() {
         cfg.statik(true);
@@ -255,11 +259,7 @@ fn find_libvips() -> ProbeResult {
         cfg.statik(false);
     }
     if let Ok(lib) = cfg.atleast_version("8.2").probe("vips") {
-        let include_paths = merge_includes(
-            lib.include_paths,
-            vendor_include_paths().unwrap_or_default(),
-        );
-        return Some((include_paths, Vec::new(), Some(lib.version.clone())));
+        return Some((lib.include_paths, Vec::new(), Some(lib.version.clone())));
     }
 
     // 3) Build static libvips from the vendored submodule
@@ -281,6 +281,7 @@ fn find_libvips() -> ProbeResult {
              or `apt install libvips-dev`) or set LIBVIPS_LIB_DIR before linking binaries."
         );
         emit_link(if prefer_static() { "static" } else { "dylib" });
+        #[cfg(feature = "bindgen")]
         let include_paths = merge_includes(include_paths, glib_include_paths());
         return Some((include_paths, Vec::new(), None));
     }
@@ -431,6 +432,10 @@ fn apply_version_cfg(version: &str) {
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=LIBVIPS_NO_VENDOR");
+    println!("cargo:rerun-if-env-changed=LIBVIPS_LIB_DIR");
+    println!("cargo:rerun-if-env-changed=LIBVIPS_INCLUDE_DIR");
+    println!("cargo:rerun-if-env-changed=LIBVIPS_STATIC");
+    println!("cargo:rerun-if-env-changed=PKG_CONFIG_PATH");
     println!("cargo:rerun-if-env-changed=VCPKG_ROOT");
     println!("cargo:rerun-if-env-changed=VCPKG_DEFAULT_TRIPLET");
     println!("cargo:rerun-if-env-changed=LIBVIPS_VERSION");

@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Performance
+
+- Cargo `resolver = "3"` (edition 2024).
+- System pkg-config hit no longer merges vendor include paths (fewer FS probes).
+- Skip glib `pkg-config` probes when the `bindgen` feature is off.
+- `helpers::init` returns cached result before allocating `CString`.
+- Build script watches `PKG_CONFIG_PATH` / `LIBVIPS_*` env for correct rebuilds.
+
 ## [0.2.0] - 2026-09-13
 
 ### Performance
