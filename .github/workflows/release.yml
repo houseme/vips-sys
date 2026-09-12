@@ -18,10 +18,15 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   verify:
     name: Verify (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -73,12 +78,16 @@ jobs:
 
       - name: Package dry-run
         if: runner.os == 'Linux'
-        run: cargo package --list
+        run: |
+          cargo package --list
+          # Pregenerated bindings compile without system libvips for packaging.
+          cargo publish --dry-run --features helpers
 
   publish:
     name: Publish crates.io and GitHub Release
     needs: verify
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
         with:
@@ -89,12 +98,13 @@ jobs:
       - name: Publish to crates.io
         # Pregenerated bindings compile without system libvips; publish verify
         # uses the packaged tarball (vendor/ excluded).
-        run: cargo publish --token "${CRATES_IO_TOKEN}"
+        run: cargo publish --locked --token "${CRATES_IO_TOKEN}"
         env:
           CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
 
       - name: Extract changelog for this version
         id: changelog
+        shell: bash
         run: |
           set -euo pipefail
           ver="${GITHUB_REF_NAME#v}"
@@ -110,10 +120,10 @@ jobs:
           cat release-notes.md
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@v2
         with:
           name: ${{ github.ref_name }}
           body_path: release-notes.md
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
-          generate_release_notes: true
+          generate_release_notes: false
