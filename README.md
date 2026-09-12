@@ -157,7 +157,34 @@ fn main() {
 
 ## License
 
-[MIT](LICENSE)
+This crate’s **Rust source code** (including `build.rs` and `src/`) is licensed under
+[MIT](LICENSE).
+
+**`libvips` itself is [LGPL-2.1](https://github.com/libvips/libvips/blob/master/LICENSE)**
+(and depends on other LGPL/GPL-compatible components such as GLib). That license is
+**not** MIT and does **not** relicense this crate.
+
+### What that means for you
+
+| Artifact | License |
+|----------|---------|
+| `vips-sys` sources / pregenerated FFI declarations | MIT |
+| Linked `libvips` library (system, vcpkg, or built from `vendor/`) | LGPL-2.1 |
+| Your final binary that links libvips | Must comply with LGPL-2.1 for libvips |
+
+Practical notes:
+
+- **Dynamic linking** (default): keep libvips replaceable/relinkable and ship the LGPL
+  notice + a way to obtain libvips sources, as required by LGPL-2.1.
+- **Static linking** (`static` feature or vendored meson build): LGPL obligations are
+  stricter (e.g. allow relinking against a modified libvips). Evaluate before shipping.
+- The `vendor/libvips` **git submodule** is LGPL-2.1 source. It is **excluded** from the
+  crates.io package (`exclude = ["vendor/"]`); if you redistribute that tree yourself,
+  do so under LGPL-2.1.
+- Pregenerated bindings are FFI declarations of the public C API, not a copy of libvips
+  implementation code.
+
+This is engineering guidance, not legal advice. For commercial compliance, consult counsel.
 
 ## Changelog
 

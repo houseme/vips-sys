@@ -5,6 +5,12 @@
 //!
 //! Enable the `bindgen` feature to regenerate bindings against the headers found
 //! on the machine (system libvips or `vendor/libvips`).
+//!
+//! # License
+//!
+//! This crate’s Rust source is **MIT**. The linked [`libvips`](https://www.libvips.org/)
+//! library is **LGPL-2.1** — distributing binaries that link libvips requires
+//! complying with LGPL-2.1 for that library. See the README “License” section.
 
 #![allow(non_upper_case_globals, non_camel_case_types, non_snake_case)]
 #![allow(clippy::missing_safety_doc)]

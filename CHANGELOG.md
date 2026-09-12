@@ -44,6 +44,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - docs.rs metadata enables `helpers` only (not `bindgen`).
 - Removed `generate.sh` — use `cargo build --features bindgen` instead.
   `wrapper.h` is kept as the bindgen entry header.
+- Document MIT (this crate) vs LGPL-2.1 (libvips) in README and source headers.
 
 ### Fixed
 

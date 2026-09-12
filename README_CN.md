@@ -156,7 +156,27 @@ fn main() {
 
 ## 许可证
 
-[MIT](LICENSE)
+本 crate 的 **Rust 源码**（含 `build.rs`、`src/`）采用 [MIT](LICENSE) 许可。
+
+**`libvips` 本体为 [LGPL-2.1](https://github.com/libvips/libvips/blob/master/LICENSE)**
+（并依赖 GLib 等兼容组件）。该许可**不是** MIT，也**不会**把本 crate 改成 LGPL。
+
+### 对使用者的含义
+
+| 产物 | 许可 |
+|------|------|
+| `vips-sys` 源码 / 预生成 FFI 声明 | MIT |
+| 链接的 libvips 库（系统包、vcpkg 或 `vendor/` 构建） | LGPL-2.1 |
+| 你最终链接 libvips 的二进制 | 必须满足 libvips 的 LGPL-2.1 义务 |
+
+实务建议：
+
+- **动态链接**（默认）：保证 libvips 可替换/可重链，并按 LGPL-2.1 提供许可以及获取源码的途径。
+- **静态链接**（`static` 或 vendor meson 构建）：LGPL 义务更重（例如允许用修改后的 libvips 重新链接），发布前请自行评估。
+- **`vendor/libvips` 子模块**源码为 LGPL-2.1。已通过 `exclude = ["vendor/"]` **排除**在 crates.io 包之外；若你自行再分发该目录，须按 LGPL-2.1 进行。
+- 预生成绑定是对 C 公开 API 的 FFI 声明，不含 libvips 实现代码。
+
+以上为工程实践说明，不构成法律意见；商用合规请咨询律师。
 
 ## 更新日志
 
