@@ -12,20 +12,60 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-
-    runs-on: ubuntu-latest
+  test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            link_tests: true
+          - os: macos-latest
+            link_tests: true
+          # Windows check/clippy with pregenerated bindings; full link tests need
+          # a vcpkg libvips install (slow). Enable link_tests after vcpkg setup.
+          - os: windows-latest
+            link_tests: false
 
     steps:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
+
       - uses: dtolnay/rust-toolchain@stable
-      - name: Set up system dependencies
+
+      - name: Install libvips (Linux)
+        if: runner.os == 'Linux' && matrix.link_tests
         run: |
           sudo apt-get update
           sudo apt-get install -y pkg-config libvips-dev
-      - name: Build
-        run: cargo build --verbose
-      - name: Run tests
-        run: cargo test --verbose
+
+      - name: Install libvips (macOS)
+        if: runner.os == 'macOS' && matrix.link_tests
+        run: |
+          brew install vips pkg-config
+          echo "PKG_CONFIG_PATH=$(brew --prefix vips)/lib/pkgconfig:$(brew --prefix)/lib/pkgconfig" >> "$GITHUB_ENV"
+
+      - name: Cache cargo
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: cargo check
+        run: cargo check --features helpers
+
+      - name: cargo clippy
+        run: cargo clippy --features helpers -- -D warnings
+
+      - name: cargo test (with system libvips)
+        if: matrix.link_tests
+        run: cargo test --features helpers
+
+      - name: cargo build (release)
+        if: matrix.link_tests
+        run: cargo build --release --features helpers

@@ -20,8 +20,18 @@ env:
 
 jobs:
   verify:
-    name: Verify tag and build
-    runs-on: ubuntu-latest
+    name: Verify (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            link_tests: true
+          - os: macos-latest
+            link_tests: true
+          - os: windows-latest
+            link_tests: false
     steps:
       - uses: actions/checkout@v7
         with:
@@ -29,12 +39,9 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Install libvips
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config libvips-dev
-
       - name: Check tag matches Cargo.toml version
+        if: runner.os == 'Linux'
+        shell: bash
         run: |
           set -euo pipefail
           tag="${GITHUB_REF_NAME#v}"
@@ -45,10 +52,27 @@ jobs:
             exit 1
           fi
 
-      - name: Cargo test
+      - name: Install libvips (Linux)
+        if: runner.os == 'Linux' && matrix.link_tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libvips-dev
+
+      - name: Install libvips (macOS)
+        if: runner.os == 'macOS' && matrix.link_tests
+        run: |
+          brew install vips pkg-config
+          echo "PKG_CONFIG_PATH=$(brew --prefix vips)/lib/pkgconfig:$(brew --prefix)/lib/pkgconfig" >> "$GITHUB_ENV"
+
+      - name: cargo check
+        run: cargo check --features helpers
+
+      - name: cargo test
+        if: matrix.link_tests
         run: cargo test --features helpers
 
       - name: Package dry-run
+        if: runner.os == 'Linux'
         run: cargo package --list
 
   publish:
@@ -62,12 +86,9 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Install libvips
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config libvips-dev
-
       - name: Publish to crates.io
+        # Pregenerated bindings compile without system libvips; publish verify
+        # uses the packaged tarball (vendor/ excluded).
         run: cargo publish --token "${CRATES_IO_TOKEN}"
         env:
           CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
@@ -77,7 +98,6 @@ jobs:
         run: |
           set -euo pipefail
           ver="${GITHUB_REF_NAME#v}"
-          # Pull the section between "## [ver]" and the next "## [" heading
           awk -v ver="$ver" '
             $0 ~ "^## \\[" ver "\\]" {grab=1; next}
             grab && /^## \[/ {exit}
