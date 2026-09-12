@@ -181,13 +181,12 @@ fn find_libvips() -> ProbeResult {
         return Some((include, Vec::new(), version));
     }
 
+    // `target_triplet` takes `&mut self` and returns `&mut Config` — do not assign back.
     let mut config = vcpkg::Config::new();
     if prefer_static() {
-        if let Ok(triplet) = env::var("VCPKG_DEFAULT_TRIPLET") {
-            config = config.target_triplet(&triplet);
-        } else {
-            config = config.target_triplet("x64-windows-static");
-        }
+        let triplet = env::var("VCPKG_DEFAULT_TRIPLET")
+            .unwrap_or_else(|_| "x64-windows-static".to_string());
+        config.target_triplet(&triplet);
     }
     match config.find_package("vips") {
         Ok(_lib) => {
