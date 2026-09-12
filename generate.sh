@@ -1,2 +1,27 @@
-bindgen wrapper.h -o src/binding.rs --rustified-enum ".*" --blocklist-type "max_align_t" --blocklist-type "FP_NAN" --blocklist-type "FP_INFINITE" --blocklist-type "FP_ZERO" --blocklist-type "FP_SUBNORMAL" --blocklist-type "FP_NORMAL" -- -I/usr/include/libgsf-1 -I/usr/include/libxml2 -I/usr/include/ImageMagick-7 -I/usr/include/orc-0.4 -I/usr/include/OpenEXR -I/usr/include/libdrm -I/usr/include/poppler/glib -I/usr/include/poppler -I/usr/include/librsvg-2.0 -I/usr/include/gdk-pixbuf-2.0 -I/usr/include/cairo -I/usr/include/pixman-1 -I/usr/include/pango-1.0 -I/usr/include/fribidi -I/usr/include/uuid -I/usr/include/freetype2 -I/usr/include/harfbuzz -I/usr/include/libpng16 -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include
+#!/usr/bin/env bash
+# Offline helper: regenerate bindings with the same allowlist as build.rs.
+# Prefer `cargo build` — build.rs applies include paths, caching, and platform probes.
+set -euo pipefail
+cd "$(dirname "$0")"
 
+bindgen wrapper.h -o src/binding.rs \
+  --use-core \
+  --ctypes-prefix core::ffi \
+  --rustified-enum ".*" \
+  --no-layout-tests \
+  --no-doc-comments \
+  --allowlist-function 'vips_.*' \
+  --allowlist-type 'Vips.*' \
+  --allowlist-var 'VIPS_.*' \
+  --allowlist-function 'g_object_unref' \
+  --allowlist-function 'g_object_ref' \
+  --allowlist-function 'g_free' \
+  --allowlist-function 'g_signal_connect_data' \
+  --allowlist-type 'GConnectFlags' \
+  --blocklist-type 'max_align_t' \
+  --blocklist-item 'FP_NAN' \
+  --blocklist-item 'FP_INFINITE' \
+  --blocklist-item 'FP_ZERO' \
+  --blocklist-item 'FP_SUBNORMAL' \
+  --blocklist-item 'FP_NORMAL' \
+  -- $(pkg-config --cflags vips 2>/dev/null || true)

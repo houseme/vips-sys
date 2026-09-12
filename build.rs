@@ -1,9 +1,17 @@
-use std::{env, path::PathBuf, process::Command};
+use std::{
+    collections::HashSet,
+    env, fs,
+    path::PathBuf,
+    process::Command,
+};
 
 type IncludePaths = Vec<PathBuf>;
 type Defines = Vec<(String, Option<String>)>;
 type VersionOpt = Option<String>;
 type ProbeResult = Option<(IncludePaths, Defines, VersionOpt)>;
+
+/// Bump when bindgen options / allowlist change so cached bindings are invalidated.
+const BINDINGS_SCHEMA: &str = "vips-sys-bindings-v2";
 
 fn env_path(name: &str) -> Option<PathBuf> {
     env::var_os(name).map(PathBuf::from)
@@ -56,13 +64,15 @@ fn emit_link(kind: &str) {
     if kind == "static" {
         println!("cargo:rustc-link-lib=static=vips");
     } else {
-        println!("cargo:rustc-link-lib=vips");
+        // Explicit dylib keeps the dynamic path obvious and avoids accidental static pull-in.
+        println!("cargo:rustc-link-lib=dylib=vips");
     }
 }
 
 fn merge_includes(mut paths: IncludePaths, extra: IncludePaths) -> IncludePaths {
+    let mut seen: HashSet<PathBuf> = paths.iter().cloned().collect();
     for p in extra {
-        if !paths.contains(&p) {
+        if seen.insert(p.clone()) {
             paths.push(p);
         }
     }
@@ -80,8 +90,22 @@ fn glib_include_paths() -> IncludePaths {
     paths
 }
 
+fn which(tool: &str) -> Option<PathBuf> {
+    if let Ok(path) = env::var(format!("{}_PATH", tool.to_ascii_uppercase())) {
+        let p = PathBuf::from(path);
+        if p.is_file() {
+            return Some(p);
+        }
+    }
+    let status = Command::new(tool).arg("--version").output().ok()?;
+    if status.status.success() {
+        Some(PathBuf::from(tool))
+    } else {
+        None
+    }
+}
+
 /// Optional meson-based static build from `vendor/libvips`.
-/// Returns Some((include_paths, lib_dir)) when a static archive is produced.
 fn try_build_vendor_static() -> Option<(IncludePaths, PathBuf)> {
     let root = vendor_root()?;
     let out_dir = PathBuf::from(env::var_os("OUT_DIR")?).join("libvips-build");
@@ -91,11 +115,7 @@ fn try_build_vendor_static() -> Option<(IncludePaths, PathBuf)> {
     let archive_alt = lib_dir.join("libvips.lib");
 
     if archive.is_file() || archive_alt.is_file() {
-        let include = prefix.join("include");
-        let mut includes = vec![include];
-        includes = merge_includes(includes, vendor_include_paths().unwrap_or_default());
-        includes = merge_includes(includes, glib_include_paths());
-        return Some((includes, lib_dir));
+        return Some((static_install_includes(&prefix), lib_dir));
     }
 
     if which("meson").is_none() || which("ninja").is_none() {
@@ -105,11 +125,12 @@ fn try_build_vendor_static() -> Option<(IncludePaths, PathBuf)> {
         return None;
     }
 
-    std::fs::create_dir_all(&out_dir).ok()?;
+    fs::create_dir_all(&out_dir).ok()?;
+    let builddir = out_dir.join("builddir");
     let status = Command::new("meson")
         .args([
             "setup",
-            out_dir.join("builddir").to_str()?,
+            builddir.to_str()?,
             root.to_str()?,
             "--prefix",
             prefix.to_str()?,
@@ -126,53 +147,32 @@ fn try_build_vendor_static() -> Option<(IncludePaths, PathBuf)> {
         return None;
     }
 
-    let status = Command::new("ninja")
-        .args(["-C", out_dir.join("builddir").to_str()?])
-        .status()
-        .ok()?;
-    if !status.success() {
-        println!("cargo:warning=vips-sys: ninja build failed for vendored libvips");
-        return None;
-    }
-
-    let status = Command::new("ninja")
-        .args(["-C", out_dir.join("builddir").to_str()?, "install"])
-        .status()
-        .ok()?;
-    if !status.success() {
-        println!("cargo:warning=vips-sys: ninja install failed for vendored libvips");
-        return None;
+    for args in [
+        vec!["-C", builddir.to_str()?],
+        vec!["-C", builddir.to_str()?, "install"],
+    ] {
+        let status = Command::new("ninja").args(&args).status().ok()?;
+        if !status.success() {
+            println!("cargo:warning=vips-sys: ninja step failed for vendored libvips");
+            return None;
+        }
     }
 
     if archive.is_file() || archive_alt.is_file() {
-        let include = prefix.join("include");
-        let mut includes = vec![include];
-        includes = merge_includes(includes, vendor_include_paths().unwrap_or_default());
-        includes = merge_includes(includes, glib_include_paths());
-        Some((includes, lib_dir))
+        Some((static_install_includes(&prefix), lib_dir))
     } else {
         None
     }
 }
 
-fn which(tool: &str) -> Option<PathBuf> {
-    if let Ok(path) = env::var(format!("{}_PATH", tool.to_ascii_uppercase())) {
-        let p = PathBuf::from(path);
-        if p.is_file() {
-            return Some(p);
-        }
-    }
-    let status = Command::new(tool).arg("--version").output().ok()?;
-    if status.status.success() {
-        Some(PathBuf::from(tool))
-    } else {
-        None
-    }
+fn static_install_includes(prefix: &std::path::Path) -> IncludePaths {
+    let mut includes = vec![prefix.join("include")];
+    includes = merge_includes(includes, vendor_include_paths().unwrap_or_default());
+    merge_includes(includes, glib_include_paths())
 }
 
 #[cfg(target_env = "msvc")]
 fn find_libvips() -> ProbeResult {
-    // 1) Env overrides (work for both static and dynamic prebuilt trees)
     if let Some(lib_dir) = env_path("LIBVIPS_LIB_DIR") {
         let include = env_path("LIBVIPS_INCLUDE_DIR")
             .map(|p| vec![p])
@@ -184,7 +184,6 @@ fn find_libvips() -> ProbeResult {
         return Some((include, Vec::new(), version));
     }
 
-    // 2) vcpkg (recommended Windows path; set VCPKG_ROOT, use triplet x64-windows / x64-windows-static)
     let mut config = vcpkg::Config::new();
     if prefer_static() {
         if let Ok(triplet) = env::var("VCPKG_DEFAULT_TRIPLET") {
@@ -217,7 +216,6 @@ fn find_libvips() -> ProbeResult {
                 }
             }
             includes = merge_includes(includes, vendor_include_paths().unwrap_or_default());
-            // vcpkg crate already emits cargo:rustc-link-* metadata
             Some((includes, Vec::new(), None))
         }
         Err(err) => {
@@ -251,8 +249,7 @@ fn find_libvips() -> ProbeResult {
         return Some((include_paths, Vec::new(), version));
     }
 
-    // 2) System library via pkg-config
-    //    `.statik(true)` asks pkg-config for `--static` libs and dependency flags.
+    // 2) System library via pkg-config (fast path — covers include dirs for glib too)
     let mut cfg = pkg_config::Config::new();
     if prefer_static() {
         cfg.statik(true);
@@ -265,7 +262,7 @@ fn find_libvips() -> ProbeResult {
         return Some((include_paths, Vec::new(), Some(lib.version.clone())));
     }
 
-    // 3) Build static libvips from the vendored submodule (needs meson + ninja)
+    // 3) Build static libvips from the vendored submodule
     if prefer_static() {
         if let Some((includes, lib_dir)) = try_build_vendor_static() {
             println!("cargo:rustc-link-search=native={}", lib_dir.display());
@@ -274,7 +271,7 @@ fn find_libvips() -> ProbeResult {
         }
     }
 
-    // 4) Vendored headers only (link still needs a built/installed libvips)
+    // 4) Vendored headers only
     if let Some(include_paths) = vendor_include_paths() {
         println!(
             "cargo:warning=vips-sys: using vendored libvips headers from vendor/libvips; \
@@ -288,7 +285,31 @@ fn find_libvips() -> ProbeResult {
     None
 }
 
-fn generate_bindings(include_paths: &[PathBuf], defines: &Defines) {
+/// Stable fingerprint of inputs that affect generated bindings.
+fn bindings_fingerprint(include_paths: &[PathBuf], version: Option<&str>) -> String {
+    let mut acc = String::with_capacity(256);
+    acc.push_str(BINDINGS_SCHEMA);
+    acc.push('\n');
+    acc.push_str(version.unwrap_or("unknown"));
+    acc.push('\n');
+    for p in include_paths {
+        acc.push_str(&p.display().to_string());
+        acc.push('\n');
+    }
+    // content of wrapper.h
+    if let Ok(w) = fs::read_to_string("wrapper.h") {
+        acc.push_str(&w);
+    }
+    // simple non-crypto hash (FNV-1a 64)
+    let mut hash: u64 = 0xcbf29ce484222325;
+    for b in acc.as_bytes() {
+        hash ^= *b as u64;
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    format!("{hash:016x}")
+}
+
+fn generate_bindings(include_paths: &[PathBuf], defines: &Defines, version: Option<&str>) {
     println!("cargo:rerun-if-changed=wrapper.h");
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=LIBVIPS_NO_BINDGEN");
@@ -303,9 +324,37 @@ fn generate_bindings(include_paths: &[PathBuf], defines: &Defines) {
         return;
     }
 
+    let out = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR"));
+    let binding_rs = out.join("binding.rs");
+    let stamp = out.join("binding.fingerprint");
+    let fp = bindings_fingerprint(include_paths, version);
+
+    // Skip the expensive clang/bindgen pass when inputs are unchanged.
+    if binding_rs.is_file() {
+        if let Ok(prev) = fs::read_to_string(&stamp) {
+            if prev.trim() == fp {
+                return;
+            }
+        }
+    }
+
     let mut builder = bindgen::Builder::default()
         .header("wrapper.h")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
+        // Allowlist keeps clang work and generated Rust small: only the libvips
+        // surface plus the few GObject helpers the high-level crate needs.
+        .allowlist_function("vips_.*")
+        .allowlist_type("Vips.*")
+        .allowlist_var("VIPS_.*")
+        .allowlist_function("g_object_unref")
+        .allowlist_function("g_object_ref")
+        .allowlist_function("g_free")
+        .allowlist_function("g_signal_connect_data")
+        .allowlist_type("GConnectFlags")
+        .use_core()
+        .ctypes_prefix("core::ffi")
+        // Only allowlisted enums are rustified; keep GConnectFlags as an enum
+        // because high-level crates match on G_CONNECT_* variants.
         .rustified_enum(".*")
         .layout_tests(false)
         .generate_comments(false)
@@ -330,10 +379,10 @@ fn generate_bindings(include_paths: &[PathBuf], defines: &Defines) {
         .generate()
         .expect("Unable to generate libvips bindings");
 
-    let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
     bindings
-        .write_to_file(out.join("binding.rs"))
+        .write_to_file(&binding_rs)
         .expect("Couldn't write bindings");
+    let _ = fs::write(&stamp, &fp);
 }
 
 fn apply_version_cfg(version: &str) {
@@ -344,6 +393,9 @@ fn apply_version_cfg(version: &str) {
             if major > 8 || (major == 8 && minor >= 17) {
                 println!("cargo:rustc-cfg=vips_8_17");
             }
+            if major > 8 || (major == 8 && minor >= 16) {
+                println!("cargo:rustc-cfg=vips_8_16");
+            }
         }
     }
 }
@@ -352,6 +404,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=LIBVIPS_NO_VENDOR");
     println!("cargo:rerun-if-env-changed=VCPKG_ROOT");
     println!("cargo:rerun-if-env-changed=VCPKG_DEFAULT_TRIPLET");
+    println!("cargo:rerun-if-env-changed=LIBVIPS_VERSION");
 
     let (include_paths, defines, version) = find_libvips().expect(
         "vips-sys: libvips not found.\n\
@@ -362,8 +415,8 @@ fn main() {
          - Or `git submodule update --init` for vendor/libvips",
     );
 
-    if let Some(v) = version {
-        apply_version_cfg(&v);
+    if let Some(v) = version.as_deref() {
+        apply_version_cfg(v);
     }
 
     println!(
@@ -375,5 +428,5 @@ fn main() {
             .join(":")
     );
 
-    generate_bindings(&include_paths, &defines);
+    generate_bindings(&include_paths, &defines, version.as_deref());
 }

@@ -104,9 +104,17 @@ vips-sys = { version = "0.1.3-beta.2", features = ["helpers"] }
 This crate uses `bindgen`:
 
 - Include paths from `pkg-config` and pass to `clang`
-- `layout_tests` disabled, `rustified_enum(".*")` enabled
+- **Allowlist** limited to `vips_*` / `Vips*` / `VIPS_*` (+ a few GObject helpers)
+  so unused GLib surface is not generated — faster builds, smaller rlib
+- Bindings are **fingerprint-cached** in `OUT_DIR`; unchanged inputs skip clang
+- `layout_tests` disabled, `use_core()` + `core::ffi` ctypes
 - Comments disabled to avoid doctest noise
-- Some items blocklisted for portability
+
+Performance tips:
+
+- Install a system `libvips` (pkg-config path) — avoids meson builds entirely
+- Second `cargo build` after a clean `OUT_DIR` change is much cheaper thanks to the cache
+- Force regeneration by touching `wrapper.h` or setting a new `LIBVIPS_INCLUDE_DIR`
 
 Environment:
 

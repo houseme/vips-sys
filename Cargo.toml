@@ -16,13 +16,14 @@ links = "vips"
 doctest = false
 
 [features]
+default = []
 static = []
 dynamic = []
 helpers = []
 
 [build-dependencies]
 pkg-config = "0.3.34"
-bindgen = "0.73.2"
+bindgen = { version = "0.73.2", default-features = false, features = ["runtime", "logging"] }
 
 [target.'cfg(target_env = "msvc")'.build-dependencies]
 vcpkg = { version = "0.2.15" }

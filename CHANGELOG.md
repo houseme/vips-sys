@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Performance
+
+- Bindgen allowlist limited to `vips_*` / `Vips*` / `VIPS_*` plus the few GObject
+  helpers (`g_object_unref`, `g_signal_connect_data`, `g_free`, …). Avoids parsing
+  and emitting the full GObject/GLib surface on every build.
+- Bindings are fingerprint-cached in `OUT_DIR` (`binding.fingerprint`); rebuilds
+  skip clang/bindgen when include paths, version, and `wrapper.h` are unchanged.
+- `use_core()` + `core::ffi` ctypes reduce generated-code noise.
+- `helpers::version` / `version_string` / `init` use `OnceLock` to avoid repeated FFI.
+- `bindgen` build-dep uses `default-features = false` (runtime + logging only).
+
 ### Added
 
 - Vendored libvips as a git submodule at `vendor/libvips` (pinned to v8.18.6).
@@ -18,6 +29,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   paths for bindgen, document `vcpkg install vips:x64-windows[-static]`.
 - Env overrides: `LIBVIPS_LIB_DIR`, `LIBVIPS_INCLUDE_DIR`, `LIBVIPS_NO_VENDOR`.
 - Export `cargo:include` for dependent sys crates.
+- `cfg(vips_8_16)` alongside `cfg(vips_8_17)`.
 
 ### Changed
 
