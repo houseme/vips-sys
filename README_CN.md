@@ -55,13 +55,34 @@ sudo apt-get install -y libvips-dev pkg-config
 ### Windows（MSVC）
 
 ```bat
-vcpkg install vips:x64-windows
 set VCPKG_ROOT=C:\path\to\vcpkg
+vcpkg install libvips:x64-windows
+set VCPKGRS_TRIPLET=x64-windows
+set VCPKGRS_DYNAMIC=1
+set PATH=%VCPKG_ROOT%\installed\x64-windows\bin;%PATH%
+cargo test --features helpers
 ```
 
-静态：`vcpkg install vips:x64-windows-static`，并设置 `VCPKG_DEFAULT_TRIPLET=x64-windows-static`。
+官方端口名是 **`libvips`**，Unix 下的 pkg-config 名称仍是 `vips`。
+实际库名及依赖从安装清单读取；动态 triplet 还需要 `VCPKGRS_DYNAMIC=1`，
+并将对应 DLL 目录加入 `PATH`。
 
-验证：`pkg-config --cflags --libs vips`（MSVC 走 vcpkg）。
+静态 libvips 配合 Rust 默认动态 CRT：
+
+```bat
+vcpkg install libvips:x64-windows-static-md
+set VCPKGRS_TRIPLET=x64-windows-static-md
+cargo test --features helpers,static
+```
+
+静态 CRT 使用 `x64-windows-static`，同时设置
+`RUSTFLAGS=-Ctarget-feature=+crt-static`。架构按 Rust target 将 `x64` 替换为
+`arm64` 或 `x86`。`VCPKGRS_TRIPLET` 优先于 `VCPKG_DEFAULT_TRIPLET`；未指定时，
+静态请求匹配目标架构与 CRT，其他请求遵循 vcpkg-rs 默认策略：通常为 `static-md`，
+显式动态链接或静态 CRT 时采用对应 triplet。
+
+MSVC 探测跟随 Cargo 目标环境，支持交叉编译时选择目标头文件和链接元数据；
+实际生成可运行程序仍需交叉链接器和针对目标构建的库。
 
 ## Cargo 用法
 
@@ -165,13 +186,15 @@ fn main() {
 | `LIBVIPS_NO_VENDOR` | 忽略 `vendor/libvips` |
 | `LIBVIPS_NO_BINDGEN` | 与 `bindgen` 合用时复制预生成绑定，无需解析头文件 |
 | `LIBVIPS_VERSION` | 覆盖用于 cfg 的版本字符串 |
-| `VCPKG_ROOT` / `VCPKG_DEFAULT_TRIPLET` | Windows vcpkg |
+| `VCPKG_ROOT` | Windows vcpkg 根目录 |
+| `VCPKGRS_TRIPLET` / `VCPKG_DEFAULT_TRIPLET` | 显式 triplet，前者优先 |
+| `VCPKGRS_DYNAMIC` | 使用动态 vcpkg 库时必须设置 |
 | `BINDGEN_EXTRA_CLANG_ARGS` | 额外 clang 参数（`bindgen` feature） |
 | `LIBCLANG_PATH` | libclang 路径（`bindgen` feature） |
 
 ## 故障排查
 
-- **链接找不到库** — 安装 libvips（`libvips-dev` / `vcpkg install vips`）
+- **链接找不到库** — 安装 libvips（`libvips-dev` / `vcpkg install libvips`）
 - **`bindgen` feature 失败** — 安装 `libclang`、glib 头文件与 vips 头文件
 - **macOS 静态链接** — 建议动态；真要静态用 vendor + meson
 - **Windows 找不到头文件** — 设置 `VCPKG_ROOT`

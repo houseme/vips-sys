@@ -15,6 +15,7 @@ jobs:
   test:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -23,10 +24,8 @@ jobs:
             link_tests: true
           - os: macos-latest
             link_tests: true
-          # Windows check/clippy with pregenerated bindings; full link tests need
-          # a vcpkg libvips install (slow). Enable link_tests after vcpkg setup.
           - os: windows-latest
-            link_tests: false
+            link_tests: true
 
     steps:
       - uses: actions/checkout@v7
@@ -55,6 +54,28 @@ jobs:
             ~/.cargo/git
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache vcpkg binaries (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v6
+        with:
+          path: ~\AppData\Local\vcpkg\archives
+          key: windows-vcpkg-libvips-${{ hashFiles('Cargo.lock') }}
+
+      - name: Install libvips (Windows vcpkg)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $root = $env:VCPKG_INSTALLATION_ROOT
+          if (-not $root -or -not (Test-Path "$root/vcpkg.exe")) {
+            throw "The Windows runner must provide VCPKG_INSTALLATION_ROOT"
+          }
+          & "$root/vcpkg.exe" install libvips:x64-windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "VCPKG_ROOT=$root" >> $env:GITHUB_ENV
+          "VCPKGRS_TRIPLET=x64-windows" >> $env:GITHUB_ENV
+          "VCPKGRS_DYNAMIC=1" >> $env:GITHUB_ENV
+          "$root/installed/x64-windows/bin" >> $env:GITHUB_PATH
 
       - name: cargo check
         run: cargo check --features helpers

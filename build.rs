@@ -3,11 +3,12 @@
 // Build script for vips-sys (MIT).
 // Links against libvips, which is LGPL-2.1 — see README “License”.
 
-#[cfg(any(not(target_env = "msvc"), feature = "bindgen"))]
 use std::fs;
-#[cfg(not(target_env = "msvc"))]
 use std::process::Command;
 use std::{collections::HashSet, env, path::PathBuf};
+
+#[path = "build_support/windows.rs"]
+mod windows;
 
 type IncludePaths = Vec<PathBuf>;
 type Defines = Vec<(String, Option<String>)>;
@@ -77,7 +78,6 @@ fn merge_includes(mut paths: IncludePaths, extra: IncludePaths) -> IncludePaths 
 }
 
 /// Used by the non-MSVC probe path and by feature `bindgen` (vendor headers).
-#[cfg(any(not(target_env = "msvc"), feature = "bindgen"))]
 fn glib_include_paths() -> IncludePaths {
     let mut paths = Vec::new();
     if let Ok(glib) = pkg_config::Config::new().probe("glib-2.0") {
@@ -90,7 +90,6 @@ fn glib_include_paths() -> IncludePaths {
 }
 
 /// meson/ninja helpers — Unix static vendor builds only.
-#[cfg(not(target_env = "msvc"))]
 fn which(tool: &str) -> Option<PathBuf> {
     if let Ok(path) = env::var(format!("{}_PATH", tool.to_ascii_uppercase())) {
         let p = PathBuf::from(path);
@@ -107,7 +106,6 @@ fn which(tool: &str) -> Option<PathBuf> {
 }
 
 /// Optional meson-based static build from `vendor/libvips`.
-#[cfg(not(target_env = "msvc"))]
 fn try_build_vendor_static() -> Option<(IncludePaths, PathBuf)> {
     let root = vendor_root()?;
     let out_dir = PathBuf::from(env::var_os("OUT_DIR")?).join("libvips-build");
@@ -167,15 +165,13 @@ fn try_build_vendor_static() -> Option<(IncludePaths, PathBuf)> {
     }
 }
 
-#[cfg(not(target_env = "msvc"))]
 fn static_install_includes(prefix: &std::path::Path) -> IncludePaths {
     let mut includes = vec![prefix.join("include")];
     includes = merge_includes(includes, vendor_include_paths().unwrap_or_default());
     merge_includes(includes, glib_include_paths())
 }
 
-#[cfg(target_env = "msvc")]
-fn find_libvips() -> ProbeResult {
+fn find_libvips_msvc() -> ProbeResult {
     if let Some(lib_dir) = env_path("LIBVIPS_LIB_DIR") {
         let include = env_path("LIBVIPS_INCLUDE_DIR")
             .map(|p| vec![p])
@@ -187,27 +183,21 @@ fn find_libvips() -> ProbeResult {
         return Some((include, Vec::new(), version));
     }
 
-    // `target_triplet` takes `&mut self` and returns `&mut Config` — do not assign back.
-    let mut config = vcpkg::Config::new();
-    if prefer_static() {
-        let triplet =
-            env::var("VCPKG_DEFAULT_TRIPLET").unwrap_or_else(|_| "x64-windows-static".to_string());
-        config.target_triplet(&triplet);
-    }
-    match config.find_package("vips") {
+    let mut config = windows::config(prefer_static());
+    match windows::probe(&mut config) {
         Ok(lib) => {
             // vcpkg already resolved the selected triplet. Do not guess another
             // installation's headers or merge in an unrelated vendor version.
             Some((
-                lib.include_paths,
+                windows::include_paths(&lib),
                 Vec::new(),
                 env::var("LIBVIPS_VERSION").ok(),
             ))
         }
         Err(err) => {
             println!(
-                "cargo:warning=vips-sys: vcpkg could not find vips ({err}); \
-                 install with `vcpkg install vips` or set LIBVIPS_LIB_DIR"
+                "cargo:warning=vips-sys: vcpkg could not find the libvips port ({err}); \
+                 install `libvips` for the selected triplet; dynamic builds also need VCPKGRS_DYNAMIC=1. Set VCPKG_ROOT or LIBVIPS_LIB_DIR if needed"
             );
             // A header directory alone is not a linkable Windows library.
             None
@@ -215,8 +205,7 @@ fn find_libvips() -> ProbeResult {
     }
 }
 
-#[cfg(not(target_env = "msvc"))]
-fn find_libvips() -> ProbeResult {
+fn find_libvips_unix() -> ProbeResult {
     // 1) Explicit env override
     if let Some(lib_dir) = env_path("LIBVIPS_LIB_DIR") {
         println!("cargo:rustc-link-search=native={}", lib_dir.display());
@@ -262,6 +251,15 @@ fn find_libvips() -> ProbeResult {
     // 4) No linkable library. Headers alone are not enough to satisfy the linker.
     //    Return None so main() can pick stub / warn / bindgen-only as appropriate.
     None
+}
+
+fn find_libvips() -> ProbeResult {
+    // Build-script cfg describes HOST. Dependency discovery must follow TARGET.
+    if env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc") {
+        find_libvips_msvc()
+    } else {
+        find_libvips_unix()
+    }
 }
 
 /// Generate bindings with bindgen (feature `bindgen` only).
@@ -395,6 +393,17 @@ fn apply_version_cfg(version: &str) {
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=build_support/windows.rs");
+    for variable in [
+        "VCPKGRS_TRIPLET",
+        "VCPKGRS_DYNAMIC",
+        "VCPKGRS_DISABLE",
+        "NO_VCPKG",
+        "VCPKGRS_NO_LIBVIPS",
+        "LIBVIPS_NO_VCPKG",
+    ] {
+        println!("cargo:rerun-if-env-changed={variable}");
+    }
     println!("cargo:rerun-if-env-changed=LIBVIPS_NO_VENDOR");
     println!("cargo:rerun-if-env-changed=LIBVIPS_LIB_DIR");
     println!("cargo:rerun-if-env-changed=LIBVIPS_INCLUDE_DIR");
@@ -452,7 +461,7 @@ fn main() {
                         panic!(
                             "vips-sys: libvips headers not found (feature `bindgen`).\n\
                          - Unix/macOS: install libvips-dev and pkg-config\n\
-                         - Windows MSVC: `vcpkg install vips` (set VCPKG_ROOT)\n\
+                         - Windows MSVC: `vcpkg install libvips:x64-windows` (set VCPKG_ROOT)\n\
                          - Or set LIBVIPS_LIB_DIR / LIBVIPS_INCLUDE_DIR\n\
                          - Or `git submodule update --init` for vendor/libvips"
                         );
@@ -473,14 +482,8 @@ fn main() {
     }
 
     if !include_paths.is_empty() {
-        println!(
-            "cargo:include={}",
-            include_paths
-                .iter()
-                .map(|p| p.display().to_string())
-                .collect::<Vec<_>>()
-                .join(":")
-        );
+        let joined = env::join_paths(&include_paths).expect("valid include paths");
+        println!("cargo:include={}", joined.to_string_lossy());
     }
 
     // Default builds compile `src/bindings/prebuilt.rs` — no clang required.

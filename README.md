@@ -58,13 +58,36 @@ sudo apt-get install -y libvips-dev pkg-config
 ### Windows (MSVC)
 
 ```bat
-vcpkg install vips:x64-windows
 set VCPKG_ROOT=C:\path\to\vcpkg
+vcpkg install libvips:x64-windows
+set VCPKGRS_TRIPLET=x64-windows
+set VCPKGRS_DYNAMIC=1
+set PATH=%VCPKG_ROOT%\installed\x64-windows\bin;%PATH%
+cargo test --features helpers
 ```
 
-Static: `vcpkg install vips:x64-windows-static` and `set VCPKG_DEFAULT_TRIPLET=x64-windows-static`.
+The official port name is **`libvips`**. The Unix pkg-config name remains `vips`;
+link library names are read from the installed port manifest and its dependencies.
+Dynamic triplets require `VCPKGRS_DYNAMIC=1` and their DLLs on `PATH`.
 
-Verify: `pkg-config --cflags --libs vips` (MSVC uses vcpkg instead).
+For static libvips with Rust's default dynamic CRT:
+
+```bat
+vcpkg install libvips:x64-windows-static-md
+set VCPKGRS_TRIPLET=x64-windows-static-md
+cargo test --features helpers,static
+```
+
+For a static CRT, use `x64-windows-static` together with
+`RUSTFLAGS=-Ctarget-feature=+crt-static`. Replace `x64` with `arm64` or `x86` to
+match the Rust target. `VCPKGRS_TRIPLET` takes precedence over
+`VCPKG_DEFAULT_TRIPLET`; absent both, static requests select the target
+architecture and CRT, while other requests use vcpkg-rs defaults (`static-md`
+unless dynamic linking or a static CRT is selected).
+
+The MSVC backend follows Cargo's target environment, including cross-compilation.
+This selects headers and link metadata; a cross linker and target-built libraries
+are still required for producing a working executable.
 
 ## Cargo
 
@@ -173,13 +196,15 @@ fn main() {
 | `LIBVIPS_NO_VENDOR` | Ignore `vendor/libvips` |
 | `LIBVIPS_NO_BINDGEN` | With `bindgen`, copy pregenerated bindings without parsing headers |
 | `LIBVIPS_VERSION` | Override version string for cfg |
-| `VCPKG_ROOT` / `VCPKG_DEFAULT_TRIPLET` | Windows vcpkg |
+| `VCPKG_ROOT` | Windows vcpkg installation root |
+| `VCPKGRS_TRIPLET` / `VCPKG_DEFAULT_TRIPLET` | Explicit triplet (Rust helper override wins) |
+| `VCPKGRS_DYNAMIC` | Required opt-in for dynamic vcpkg libraries |
 | `BINDGEN_EXTRA_CLANG_ARGS` | Extra clang flags (bindgen feature) |
 | `LIBCLANG_PATH` | libclang location (bindgen feature) |
 
 ## Troubleshooting
 
-- **link error, library not found** — install libvips (`libvips-dev` / `vcpkg install vips`)
+- **link error, library not found** — install libvips (`libvips-dev` / `vcpkg install libvips`)
 - **bindgen feature fails** — install `libclang`, glib headers, and vips headers
 - **static on macOS** — prefer dynamic (Homebrew); use vendor + meson for true static
 - **Windows headers** — set `VCPKG_ROOT` so include paths resolve

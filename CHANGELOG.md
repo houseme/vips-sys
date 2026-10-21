@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+### Fixed
+
+- Windows MSVC: probe the official vcpkg `libvips` port rather than `vips`
+  ([#11](https://github.com/houseme/vips-sys/issues/11)); correct installation
+  commands and document dynamic-library opt-in and DLL lookup.
+- Respect `VCPKGRS_TRIPLET` before `VCPKG_DEFAULT_TRIPLET`. Static defaults now
+  match the target architecture and CRT instead of always forcing x64/static CRT.
+- Select dependency discovery using Cargo's target environment rather than the
+  build-script host; watch vcpkg environment overrides for incremental rebuilds.
+- Include GLib headers from the selected triplet and export include metadata with
+  the host's path separator, preserving Windows drive-letter paths.
+
+### Added
+
+- Isolated regression tests using the actual vcpkg metadata parser for the official
+  port, transitive libraries, dynamic opt-in, architecture/CRT and explicit triplets.
+- Native Windows CI installs `libvips:x64-windows` and executes linked helper tests.
+
 ## [0.3.0] - 2026-10-22
 
 ### Added
@@ -81,7 +99,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Static linking: `pkg-config --static` / vcpkg static triplet; optional meson+ninja
   build from vendored sources (`static` feature or `LIBVIPS_STATIC=1`).
 - Windows/vcpkg: `VCPKG_ROOT`, `VCPKG_DEFAULT_TRIPLET`; document
-  `vcpkg install vips:x64-windows[-static]`.
+  `vcpkg install libvips:x64-windows[-static]`.
 - Env overrides: `LIBVIPS_LIB_DIR`, `LIBVIPS_INCLUDE_DIR`, `LIBVIPS_NO_VENDOR`,
   `LIBVIPS_STATIC` (`0`/`false`/`off` disable).
 - Export `cargo:include` for dependent sys crates.

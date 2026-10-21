@@ -35,9 +35,11 @@ v8_18 = []
 pkg-config = "0.3.34"
 bindgen = { version = "0.73.2", optional = true, default-features = false, features = ["runtime", "logging"] }
 cc = { version = "1.9.0", optional = true }
+# Build scripts run on the host, including when their target is MSVC.
+vcpkg = "0.2.15"
 
-[target.'cfg(target_env = "msvc")'.build-dependencies]
-vcpkg = { version = "0.2.15" }
+[dev-dependencies]
+vcpkg = "0.2.15"
 
 [package.metadata.docs.rs]
 # Do not enable `bindgen` on docs.rs — it needs libclang + vips headers.
