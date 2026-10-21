@@ -79,7 +79,7 @@ fn subprocess_probe() {
     let prefix = PathBuf::from(std::env::var_os("VCPKG_ROOT").unwrap())
         .join("installed")
         .join(triplet);
-    let includes = windows::include_paths(&library);
+    let includes = windows::include_paths(library);
     for directory in ["include", "include/glib-2.0", "lib/glib-2.0/include"] {
         assert!(includes.contains(&prefix.join(directory)));
     }

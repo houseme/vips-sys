@@ -40,13 +40,13 @@ Dynamic triplets require `VCPKGRS_DYNAMIC=1` even when explicitly selected; this
 vcpkg-rs contract is documented rather than bypassed by mutating global process
 environment. DLLs must remain discoverable through `PATH` at runtime.
 
-`build.rs:256` — Select the backend from the compilation target.
+`build.rs:143` — Select the backend from the compilation target.
 Severity: Major. `#[cfg(target_env = "msvc")]` in a build script tests its host,
 so a non-Windows host targeting MSVC previously entered the Unix probe. Runtime
 selection now reads `CARGO_CFG_TARGET_ENV`; the tiny vcpkg build dependency is
 available to every host. Unix/pkg-config discovery remains the Unix target path.
 
-`build_support/windows.rs:34` and `build.rs:485` — Preserve target headers and paths.
+`build_support/windows.rs:34` and `build.rs:421` — Preserve target headers and paths.
 Severity: Minor. Add GLib's split include directories from the selected triplet;
 never borrow another installation's `glibconfig.h`. Include metadata now uses
 `env::join_paths`, which preserves drive-letter paths on a Windows host.
@@ -98,3 +98,11 @@ This fixes the current Git source. It does not replace the already published
 prepared 0.3.0. Use the paired current source checkouts for development; a 0.2
 backport or package publication is a separate release decision. No package or
 release tag is created as part of this fix.
+
+## Release hardening follow-up
+
+The linked [native Windows CI run](https://github.com/houseme/vips-sys/actions/runs/39640145662)
+completed successfully on Windows, Linux, macOS and the no-library stub job.
+The subsequent provider refactor is described in
+[build-system review](build-system-review-2026-10-22.md). The release candidate
+folds this fix into the 0.3.0 changelog rather than leaving it Unreleased.

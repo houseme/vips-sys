@@ -34,7 +34,7 @@
 但声明不代表旧系统库具有相应符号，使用前必须满足各 API 的版本要求。
 
 子模块固定至最新正式版 **8.18.7**，其公开头文件相对 8.18.6 没有变化。
-完整核查见 [upstream review](docs/upstream-review-2026-10-22.md)。本版本仅在 Git 中准备，尚未发布。
+完整核查见 [upstream review](docs/upstream-review-2026-10-22.md)。
 
 ## 安装
 
@@ -127,6 +127,12 @@ LIBVIPS_STATIC=1 cargo build
 2. 有 `meson` + `ninja` 时从 `vendor/libvips` 构建到 `OUT_DIR`
 3. 否则给出明确错误
 
+`static` 选择 libvips 静态归档，系统 codec 依赖仍可动态链接。
+原生 vendor 构建需要 **Meson 0.60+**、Ninja 及 GLib/codec 开发文件。
+`MESON_PATH` / `NINJA_PATH` 指定工具，`CXXSTDLIB` 可覆盖自定义工具链的 C++ 运行库。
+仅构建归档与开发文件；源文件变化由 Ninja 增量重建，编译环境变化会重置 Meson 配置。
+交叉目标需要预先构建的目标库。
+
 ### 子模块中的 libvips
 
 `vendor/libvips` 固定 [libvips](https://github.com/libvips/libvips) **v8.18.7**
@@ -191,6 +197,8 @@ fn main() {
 | `VCPKGRS_DYNAMIC` | 使用动态 vcpkg 库时必须设置 |
 | `BINDGEN_EXTRA_CLANG_ARGS` | 额外 clang 参数（`bindgen` feature） |
 | `LIBCLANG_PATH` | libclang 路径（`bindgen` feature） |
+| `MESON_PATH` / `NINJA_PATH` | 原生 vendor 构建工具 |
+| `CXXSTDLIB` | 静态 provider 的 C++ 运行库覆盖 |
 
 ## 故障排查
 

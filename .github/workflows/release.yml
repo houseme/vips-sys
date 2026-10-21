@@ -2,7 +2,7 @@
 #
 # Triggers:
 #   - push of a version tag (vX.Y.Z or vX.Y.Z-pre)
-#   - manual `workflow_dispatch` with a `tag` input (e.g. v0.2.0)
+#   - manual `workflow_dispatch` with a `tag` input (e.g. v0.3.0)
 #
 # Required repository secret:
 #   CRATES_IO_TOKEN — crates.io API token with publish rights for vips-sys
@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag (e.g. v0.2.0); must match Cargo.toml version"
+        description: "Release tag (e.g. v0.3.0); must match Cargo.toml version"
         required: true
         type: string
 
@@ -36,7 +36,7 @@ jobs:
   verify:
     name: Verify (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -46,11 +46,9 @@ jobs:
           - os: macos-latest
             link_tests: true
           - os: windows-latest
-            link_tests: false
+            link_tests: true
     steps:
       - uses: actions/checkout@v7
-        with:
-          submodules: recursive
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -79,29 +77,80 @@ jobs:
           brew install vips pkg-config
           echo "PKG_CONFIG_PATH=$(brew --prefix vips)/lib/pkgconfig:$(brew --prefix)/lib/pkgconfig" >> "$GITHUB_ENV"
 
+      - name: Cache vcpkg binaries (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v6
+        with:
+          path: ~\AppData\Local\vcpkg\archives
+          key: windows-vcpkg-libvips-${{ hashFiles('Cargo.lock') }}
+
+      - name: Install libvips (Windows vcpkg)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $root = $env:VCPKG_INSTALLATION_ROOT
+          if (-not $root -or -not (Test-Path "$root/vcpkg.exe")) {
+            throw "The Windows runner must provide VCPKG_INSTALLATION_ROOT"
+          }
+          & "$root/vcpkg.exe" install libvips:x64-windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "VCPKG_ROOT=$root" >> $env:GITHUB_ENV
+          "VCPKGRS_TRIPLET=x64-windows" >> $env:GITHUB_ENV
+          "VCPKGRS_DYNAMIC=1" >> $env:GITHUB_ENV
+          "$root/installed/x64-windows/bin" >> $env:GITHUB_PATH
+
       - name: cargo check
         run: cargo check --features helpers
+
+      - name: cargo fmt
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets --features helpers -- -D warnings
 
       - name: cargo test
         if: matrix.link_tests
         run: cargo test --features helpers
+
+      - name: Header-free stub regression (Linux)
+        if: runner.os == 'Linux'
+        env:
+          VIPS_NO_PKG_CONFIG: "1"
+          LIBVIPS_NO_VENDOR: "1"
+        run: cargo test --locked --features helpers,stub
 
       - name: Package dry-run
         if: runner.os == 'Linux'
         run: |
           cargo package --list
           # Pregenerated bindings compile without system libvips for packaging.
-          cargo publish --dry-run --features helpers
+          cargo publish --dry-run --locked --features helpers
 
-  publish:
-    name: Publish crates.io and GitHub Release
-    needs: verify
+  verify-vendor:
+    name: Verify native static provider
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    env:
+      VIPS_NO_PKG_CONFIG: "1"
     steps:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install native build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config meson ninja-build libglib2.0-dev libexpat1-dev
+      - name: Build and execute against the vendor archive
+        run: cargo test --locked --features helpers,static
+
+  publish:
+    name: Publish crates.io and GitHub Release
+    needs: [verify, verify-vendor]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -133,6 +182,7 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
           name: ${{ env.RELEASE_TAG }}
           body_path: release-notes.md
           draft: false

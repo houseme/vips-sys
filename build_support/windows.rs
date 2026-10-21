@@ -31,12 +31,12 @@ pub fn probe(config: &mut vcpkg::Config) -> Result<vcpkg::Library, vcpkg::Error>
     config.find_package("libvips")
 }
 
-pub fn include_paths(lib: &vcpkg::Library) -> Vec<PathBuf> {
-    let mut paths = lib.include_paths.clone();
+pub fn include_paths(lib: vcpkg::Library) -> Vec<PathBuf> {
+    let mut paths = lib.include_paths;
     // GLib headers are split across the selected triplet's include and lib
     // directories. Never mix in system headers or another triplet's glibconfig.h.
-    for include in &lib.include_paths {
-        let glib = include.join("glib-2.0");
+    for index in 0..paths.len() {
+        let glib = paths[index].join("glib-2.0");
         if glib.is_dir() {
             paths.push(glib);
         }

@@ -9,6 +9,52 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-22
+
+### Added
+
+- Isolated regression tests using the actual vcpkg metadata parser for the official
+  port, transitive libraries, dynamic opt-in, architecture/CRT and explicit triplets.
+- Native Windows CI installs `libvips:x64-windows` and executes linked helper tests.
+
+- Public `helpers::is_initialized` and shared process-wide initialization state.
+- Feature `v8_18` for a libvips 8.18+ probe; register version cfgs including `vips_8_18`.
+- An upstream API/merged-PR audit in `docs/upstream-review-2026-10-22.md`.
+- Refresh configured headers to expose 56 previously omitted enum `*_get_type`
+  functions (1,156 libvips declarations total), preserving all prior functions.
+- `scripts/refresh-prebuilt.py` checks the header version and rejects accidental
+  API removal when maintaining pregenerated bindings.
+
+- `Release` workflow supports manual `workflow_dispatch` with a `tag` input (in addition to tag push).
+- Release workflow hardening: concurrency group per tag, job timeouts,
+  `cargo publish --dry-run` in verify, `--locked` on the real publish.
+
+### Changed
+
+- Pin the libvips submodule and pregenerated version constants to **8.18.7**.
+  The 8.18.6-to-8.18.7 comparison changes no public headers or function declarations.
+- Remove the invalid tag-as-branch submodule setting; the gitlink pins the revision.
+- Correct the pregenerated libtool ABI version constants from the release headers.
+
+- CI: `softprops/action-gh-release@v3`; changelog extract uses `shell: bash`.
+- Update optional build-dependency `cc` from `1.4.5` to `1.9.0` (feature `stub`), retaining the existing dependency refresh.
+- Apply `cargo fmt` to `build.rs` (import order and line wrapping).
+- Point `package.documentation` and README docs links at <https://docs.rs/vips-sys/> (drop GitHub Pages URLs).
+
+- The native vendor builder requires Meson 0.60+ and Ninja, with native dependency
+  development files installed; it does not download dependency subprojects.
+- Native Windows linked tests and header-free stub checks are part of release
+  verification. Version tags use this gate without duplicating the regular CI matrix.
+
+### Performance
+
+- Snapshot build policy once, share explicit-override handling, and use named
+  library metadata across Unix and MSVC providers.
+- Move include paths instead of cloning them; bindgen normalizes in memory and
+  writes only changed output, without watching unrelated vendor source trees.
+- Vendor builds compile only the libvips archive and install changed development
+  artifacts, avoiding unnecessary tools, examples and fuzz executables.
+
 ### Fixed
 
 - Windows MSVC: probe the official vcpkg `libvips` port rather than `vips`
@@ -20,26 +66,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   build-script host; watch vcpkg environment overrides for incremental rebuilds.
 - Include GLib headers from the selected triplet and export include metadata with
   the host's path separator, preserving Windows drive-letter paths.
-
-### Added
-
-- Isolated regression tests using the actual vcpkg metadata parser for the official
-  port, transitive libraries, dynamic opt-in, architecture/CRT and explicit triplets.
-- Native Windows CI installs `libvips:x64-windows` and executes linked helper tests.
-
-## [0.3.0] - 2026-10-22
-
-### Added
-
-- Public `helpers::is_initialized` and shared process-wide initialization state.
-- Feature `v8_18` for a libvips 8.18+ probe; register version cfgs including `vips_8_18`.
-- An upstream API/merged-PR audit in `docs/upstream-review-2026-10-22.md`.
-- Refresh configured headers to expose 56 previously omitted enum `*_get_type`
-  functions (1,156 libvips declarations total), preserving all prior functions.
-- `scripts/refresh-prebuilt.py` checks the header version and rejects accidental
-  API removal when maintaining pregenerated bindings.
-
-### Fixed
 
 - `helpers::init` only caches success, permitting retries after errors.
 - Use pointer-sized GLib `gsize`/`gssize` aliases in prebuilt and generated
@@ -53,26 +79,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
   callbacks remain effective after rebuilds.
 - Honor `LIBVIPS_STATIC` over Cargo's `dynamic` feature as documented.
 
-### Changed
-
-- Pin the libvips submodule and pregenerated version constants to **8.18.7**.
-  The 8.18.6-to-8.18.7 comparison changes no public headers or function declarations.
-- Remove the invalid tag-as-branch submodule setting; the gitlink pins the revision.
-- Correct the pregenerated libtool ABI version constants from the release headers.
-- Version prepared in Git only; no crates.io publish or release tag.
-
-### Added
-
-- `Release` workflow supports manual `workflow_dispatch` with a `tag` input (in addition to tag push).
-- Release workflow hardening: concurrency group per tag, job timeouts,
-  `cargo publish --dry-run` in verify, `--locked` on the real publish.
-
-### Changed
-
-- CI: `softprops/action-gh-release@v3`; changelog extract uses `shell: bash`.
-- Update optional build-dependency `cc` from `1.4.5` to `1.9.0` (feature `stub`), retaining the existing dependency refresh.
-- Apply `cargo fmt` to `build.rs` (import order and line wrapping).
-- Point `package.documentation` and README docs links at <https://docs.rs/vips-sys/> (drop GitHub Pages URLs).
+- Reuse native object files through Ninja while rebuilding changed source;
+  reset Meson configuration after compiler/environment changes instead of trusting
+  an existing archive indefinitely.
+- Honor `MESON_PATH` / `NINJA_PATH`, fix the vendor libdir, and reject a dylib when
+  a system static archive was requested.
+- Resolve static libvips dependency metadata and select the platform C++ runtime;
+  static libvips may use dynamically linked system codec dependencies.
+- Recheck vcpkg installation metadata and selected version headers after updates.
+- Preserve complete pkg-config dependencies for explicit Unix installations.
 
 ## [0.2.0] - 2026-09-13
 

@@ -37,7 +37,6 @@ older system library. Only call APIs present in the library you link.
 
 The vendored source is pinned to the latest release, **8.18.7**. Its public
 headers are unchanged from 8.18.6. See the [upstream audit](docs/upstream-review-2026-10-22.md).
-The version is prepared in Git; it has not been published.
 
 ## Installation
 
@@ -134,6 +133,14 @@ Resolution order:
 2. Meson + ninja build of `vendor/libvips` into `OUT_DIR` (if tools are on `PATH`)
 3. Clear error otherwise
 
+The `static` preference selects the libvips archive; system codec dependencies
+may remain dynamic. The vendor builder requires **Meson 0.60+**, Ninja and native
+GLib/codec development files. `MESON_PATH` / `NINJA_PATH` select the tools, and
+`CXXSTDLIB` overrides the platform C++ runtime when using a custom toolchain.
+It builds the archive and development artifacts only. Ninja handles source
+changes incrementally; compiler/environment changes reset Meson configuration.
+Cross targets require prebuilt target libraries rather than this native builder.
+
 ### Vendored libvips (submodule)
 
 `vendor/libvips` tracks [libvips](https://github.com/libvips/libvips) at **v8.18.7**
@@ -201,6 +208,8 @@ fn main() {
 | `VCPKGRS_DYNAMIC` | Required opt-in for dynamic vcpkg libraries |
 | `BINDGEN_EXTRA_CLANG_ARGS` | Extra clang flags (bindgen feature) |
 | `LIBCLANG_PATH` | libclang location (bindgen feature) |
+| `MESON_PATH` / `NINJA_PATH` | Native vendor build tools |
+| `CXXSTDLIB` | Override the static provider's C++ runtime |
 
 ## Troubleshooting
 

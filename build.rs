@@ -4,33 +4,43 @@
 // Links against libvips, which is LGPL-2.1 — see README “License”.
 
 use std::fs;
-use std::process::Command;
 use std::{collections::HashSet, env, path::PathBuf};
 
+#[path = "build_support/config.rs"]
+mod config;
+use config::BuildOptions;
+
+#[path = "build_support/unix.rs"]
+mod unix;
 #[path = "build_support/windows.rs"]
 mod windows;
 
 type IncludePaths = Vec<PathBuf>;
 type Defines = Vec<(String, Option<String>)>;
-type VersionOpt = Option<String>;
-type ProbeResult = Option<(IncludePaths, Defines, VersionOpt)>;
-
-fn env_path(name: &str) -> Option<PathBuf> {
-    env::var_os(name).map(PathBuf::from)
+#[derive(Default)]
+struct LibraryInfo {
+    include_paths: IncludePaths,
+    defines: Defines,
+    version: Option<String>,
 }
 
-/// Prefer static linking when `LIBVIPS_STATIC` is set or the `static` feature is
-/// enabled without `dynamic`. Env var wins over Cargo features (sys-crate convention).
-fn prefer_static() -> bool {
-    if let Ok(v) = env::var("LIBVIPS_STATIC") {
-        let v = v.to_ascii_lowercase();
-        return v != "0" && v != "false" && v != "off";
+type ProbeResult = Option<LibraryInfo>;
+
+fn pkg_info(lib: pkg_config::Library, options: &BuildOptions) -> LibraryInfo {
+    let defines = if options.generate_bindings {
+        lib.defines.into_iter().collect()
+    } else {
+        Vec::new()
+    };
+    LibraryInfo {
+        include_paths: lib.include_paths,
+        defines,
+        version: Some(lib.version),
     }
-    cfg!(feature = "static") && !cfg!(feature = "dynamic")
 }
 
-fn vendor_root() -> Option<PathBuf> {
-    if env::var_os("LIBVIPS_NO_VENDOR").is_some() {
+fn vendor_root(options: &BuildOptions) -> Option<PathBuf> {
+    if options.no_vendor {
         return None;
     }
     let root = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR")?).join("vendor/libvips");
@@ -41,8 +51,8 @@ fn vendor_root() -> Option<PathBuf> {
     }
 }
 
-fn vendor_include_paths() -> Option<IncludePaths> {
-    let root = vendor_root()?;
+fn vendor_include_paths(options: &BuildOptions) -> Option<IncludePaths> {
+    let root = vendor_root(options)?;
     let mut paths = Vec::new();
     let candidates = [
         root.join("libvips/include"),
@@ -79,120 +89,45 @@ fn merge_includes(mut paths: IncludePaths, extra: IncludePaths) -> IncludePaths 
 
 /// Used by the non-MSVC probe path and by feature `bindgen` (vendor headers).
 fn glib_include_paths() -> IncludePaths {
-    let mut paths = Vec::new();
-    if let Ok(glib) = pkg_config::Config::new().probe("glib-2.0") {
-        paths = merge_includes(paths, glib.include_paths);
-    }
-    if let Ok(gobject) = pkg_config::Config::new().probe("gobject-2.0") {
-        paths = merge_includes(paths, gobject.include_paths);
-    }
-    paths
+    // GObject's .pc file already requires GLib; one probe supplies both.
+    pkg_config::Config::new()
+        .probe("gobject-2.0")
+        .map(|lib| lib.include_paths)
+        .unwrap_or_default()
 }
 
-/// meson/ninja helpers — Unix static vendor builds only.
-fn which(tool: &str) -> Option<PathBuf> {
-    if let Ok(path) = env::var(format!("{}_PATH", tool.to_ascii_uppercase())) {
-        let p = PathBuf::from(path);
-        if p.is_file() {
-            return Some(p);
+fn find_libvips_msvc(options: &BuildOptions) -> ProbeResult {
+    let mut config = windows::config(options.static_linking);
+    if let Ok(root) = vcpkg::find_vcpkg_root(&config) {
+        for path in [
+            root.join("installed/vcpkg/status"),
+            root.join("installed/vcpkg/updates"),
+        ] {
+            println!("cargo:rerun-if-changed={}", path.display());
         }
     }
-    let status = Command::new(tool).arg("--version").output().ok()?;
-    if status.status.success() {
-        Some(PathBuf::from(tool))
-    } else {
-        None
-    }
-}
-
-/// Optional meson-based static build from `vendor/libvips`.
-fn try_build_vendor_static() -> Option<(IncludePaths, PathBuf)> {
-    let root = vendor_root()?;
-    let out_dir = PathBuf::from(env::var_os("OUT_DIR")?).join("libvips-build");
-    let prefix = out_dir.join("install");
-    let lib_dir = prefix.join("lib");
-    let archive = lib_dir.join("libvips.a");
-    let archive_alt = lib_dir.join("libvips.lib");
-
-    if archive.is_file() || archive_alt.is_file() {
-        return Some((static_install_includes(&prefix), lib_dir));
-    }
-
-    if which("meson").is_none() || which("ninja").is_none() {
-        println!(
-            "cargo:warning=vips-sys: meson/ninja not found; cannot build static libvips from vendor"
-        );
-        return None;
-    }
-
-    fs::create_dir_all(&out_dir).ok()?;
-    let builddir = out_dir.join("builddir");
-    let status = Command::new("meson")
-        .args([
-            "setup",
-            builddir.to_str()?,
-            root.to_str()?,
-            "--prefix",
-            prefix.to_str()?,
-            "--default-library=static",
-            "--buildtype=release",
-            "-Dintrospection=disabled",
-            "-Dmodules=disabled",
-            "-Ddeprecated=false",
-        ])
-        .status()
-        .ok()?;
-    if !status.success() {
-        println!("cargo:warning=vips-sys: meson setup failed for vendored libvips");
-        return None;
-    }
-
-    for args in [
-        vec!["-C", builddir.to_str()?],
-        vec!["-C", builddir.to_str()?, "install"],
-    ] {
-        let status = Command::new("ninja").args(&args).status().ok()?;
-        if !status.success() {
-            println!("cargo:warning=vips-sys: ninja step failed for vendored libvips");
-            return None;
-        }
-    }
-
-    if archive.is_file() || archive_alt.is_file() {
-        Some((static_install_includes(&prefix), lib_dir))
-    } else {
-        None
-    }
-}
-
-fn static_install_includes(prefix: &std::path::Path) -> IncludePaths {
-    let mut includes = vec![prefix.join("include")];
-    includes = merge_includes(includes, vendor_include_paths().unwrap_or_default());
-    merge_includes(includes, glib_include_paths())
-}
-
-fn find_libvips_msvc() -> ProbeResult {
-    if let Some(lib_dir) = env_path("LIBVIPS_LIB_DIR") {
-        let include = env_path("LIBVIPS_INCLUDE_DIR")
-            .map(|p| vec![p])
-            .or_else(vendor_include_paths)
-            .unwrap_or_default();
-        println!("cargo:rustc-link-search=native={}", lib_dir.display());
-        emit_link(if prefer_static() { "static" } else { "dylib" });
-        let version = env::var("LIBVIPS_VERSION").ok();
-        return Some((include, Vec::new(), version));
-    }
-
-    let mut config = windows::config(prefer_static());
     match windows::probe(&mut config) {
         Ok(lib) => {
             // vcpkg already resolved the selected triplet. Do not guess another
             // installation's headers or merge in an unrelated vendor version.
-            Some((
-                windows::include_paths(&lib),
-                Vec::new(),
-                env::var("LIBVIPS_VERSION").ok(),
-            ))
+            let version = options.version.clone().or_else(|| {
+                lib.include_paths.iter().find_map(|include| {
+                    let header = include.join("vips/version.h");
+                    if header.is_file() {
+                        println!("cargo:rerun-if-changed={}", header.display());
+                        fs::read_to_string(header)
+                            .ok()
+                            .and_then(|text| config::header_version(&text))
+                    } else {
+                        None
+                    }
+                })
+            });
+            Some(LibraryInfo {
+                include_paths: windows::include_paths(lib),
+                defines: Vec::new(),
+                version,
+            })
         }
         Err(err) => {
             println!(
@@ -205,60 +140,45 @@ fn find_libvips_msvc() -> ProbeResult {
     }
 }
 
-fn find_libvips_unix() -> ProbeResult {
-    // 1) Explicit env override
-    if let Some(lib_dir) = env_path("LIBVIPS_LIB_DIR") {
+fn find_libvips(options: &BuildOptions) -> ProbeResult {
+    // An explicit installation is the common fast path for every target.
+    if let Some(lib_dir) = &options.lib_dir {
+        // Keep the installation's complete native dependency metadata when
+        // available, including GObject symbols used by the safe wrapper.
+        if !options.msvc
+            && let Some(info) = unix::explicit(options, lib_dir)
+        {
+            return Some(info);
+        }
         println!("cargo:rustc-link-search=native={}", lib_dir.display());
-        emit_link(if prefer_static() { "static" } else { "dylib" });
-        let include_paths = env_path("LIBVIPS_INCLUDE_DIR")
-            .map(|p| vec![p])
-            .or_else(vendor_include_paths)
-            .unwrap_or_default();
-        // glib headers are only required when bindgen parses vendor/system headers.
-        #[cfg(feature = "bindgen")]
-        let include_paths = merge_includes(include_paths, glib_include_paths());
-        let version = env::var("LIBVIPS_VERSION").ok();
-        return Some((include_paths, Vec::new(), version));
-    }
-
-    // 2) System library via pkg-config (fast path)
-    //    Do not merge vendor headers here: system includes match the linked
-    //    library, and skipping FS probes keeps the build script cheap.
-    let mut cfg = pkg_config::Config::new();
-    if prefer_static() {
-        cfg.statik(true);
-    }
-    if let Ok(lib) = cfg
-        .atleast_version(if cfg!(feature = "v8_18") {
-            "8.18"
+        emit_link(if options.static_linking {
+            "static"
         } else {
-            "8.2"
-        })
-        .probe("vips")
-    {
-        return Some((lib.include_paths, Vec::new(), Some(lib.version.clone())));
+            "dylib"
+        });
+        let mut include_paths = options
+            .include_dir
+            .clone()
+            .map(|p| vec![p])
+            .unwrap_or_default();
+        if options.generate_bindings && include_paths.is_empty() {
+            include_paths = vendor_include_paths(options).unwrap_or_default();
+        }
+        // The safe wrapper also calls GObject helpers directly. Their link
+        // metadata is required even when bindings are pre-generated.
+        if !options.msvc {
+            include_paths = merge_includes(include_paths, glib_include_paths());
+        }
+        return Some(LibraryInfo {
+            include_paths,
+            defines: Vec::new(),
+            version: options.version.clone(),
+        });
     }
-
-    // 3) Build static libvips from the vendored submodule
-    if prefer_static()
-        && let Some((includes, lib_dir)) = try_build_vendor_static()
-    {
-        println!("cargo:rustc-link-search=native={}", lib_dir.display());
-        emit_link("static");
-        return Some((includes, Vec::new(), None));
-    }
-
-    // 4) No linkable library. Headers alone are not enough to satisfy the linker.
-    //    Return None so main() can pick stub / warn / bindgen-only as appropriate.
-    None
-}
-
-fn find_libvips() -> ProbeResult {
-    // Build-script cfg describes HOST. Dependency discovery must follow TARGET.
-    if env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc") {
-        find_libvips_msvc()
+    if options.msvc {
+        find_libvips_msvc(options)
     } else {
-        find_libvips_unix()
+        unix::find(options)
     }
 }
 
@@ -273,7 +193,6 @@ fn generate_bindings(include_paths: &[PathBuf], defines: &Defines) {
     println!("cargo:rerun-if-env-changed=LIBVIPS_STATIC");
     println!("cargo:rerun-if-env-changed=LIBVIPS_NO_VENDOR");
     println!("cargo:rerun-if-env-changed=VCPKG_ROOT");
-    println!("cargo:rerun-if-changed=vendor/libvips");
 
     let out = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR"));
     let binding_rs = out.join("binding.rs");
@@ -325,11 +244,9 @@ fn generate_bindings(include_paths: &[PathBuf], defines: &Defines) {
         .generate()
         .expect("Unable to generate libvips bindings");
 
-    bindings
-        .write_to_file(&binding_rs)
-        .expect("Couldn't write bindings");
-    // Prepend license notice so copies into src/bindings/prebuilt.rs keep it.
-    if let Ok(body) = fs::read_to_string(&binding_rs) {
+    // Normalize in memory and write once; unchanged contents retain their mtime.
+    {
+        let body = bindings.to_string();
         let header = concat!(
             "/* automatically generated by rust-bindgen (vips-sys)\n",
             " *\n",
@@ -359,22 +276,24 @@ fn generate_bindings(include_paths: &[PathBuf], defines: &Defines) {
             });
             normalized.push('\n');
         }
-        fs::write(&binding_rs, format!("{header}{normalized}"))
-            .expect("Couldn't normalize bindings");
+        let output = format!("{header}{normalized}");
+        if fs::read_to_string(&binding_rs).ok().as_deref() != Some(output.as_str()) {
+            fs::write(&binding_rs, output).expect("Couldn't write bindings");
+        }
     }
 
     // Convenience for maintainers: print where to copy when refreshing prebuilt.rs
     println!(
-        "cargo:warning=vips-sys: wrote {} — copy to src/bindings/prebuilt.rs to refresh defaults",
+        "cargo:warning=vips-sys: bindings ready at {} — use scripts/refresh-prebuilt.py to refresh defaults",
         binding_rs.display()
     );
 }
 
 fn apply_version_cfg(version: &str) {
     println!("cargo:rustc-env=LIBVIPS_VERSION={}", version);
-    let ver_parts: Vec<_> = version.split('.').collect();
-    if ver_parts.len() >= 2
-        && let (Ok(major), Ok(minor)) = (ver_parts[0].parse::<u32>(), ver_parts[1].parse::<u32>())
+    let mut parts = version.split('.');
+    if let (Some(major), Some(minor)) = (parts.next(), parts.next())
+        && let (Ok(major), Ok(minor)) = (major.parse::<u32>(), minor.parse::<u32>())
     {
         if cfg!(feature = "v8_18") && (major, minor) < (8, 18) {
             panic!("vips-sys: feature v8_18 requires libvips >= 8.18, found {version}");
@@ -394,7 +313,12 @@ fn apply_version_cfg(version: &str) {
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=build_support/windows.rs");
+    println!("cargo:rerun-if-changed=build_support/config.rs");
+    println!("cargo:rerun-if-changed=build_support/unix.rs");
     for variable in [
+        "MESON_PATH",
+        "NINJA_PATH",
+        "CXXSTDLIB",
         "VCPKGRS_TRIPLET",
         "VCPKGRS_DYNAMIC",
         "VCPKGRS_DISABLE",
@@ -418,10 +342,15 @@ fn main() {
         println!("cargo:rustc-check-cfg=cfg({cfg})");
     }
     println!("cargo:rerun-if-changed=src/bindings/prebuilt.rs");
-    let found = find_libvips();
+    let options = BuildOptions::from_env();
+    let found = find_libvips(&options);
 
-    let (include_paths, defines, version) = match found {
-        Some(triple) => triple,
+    let LibraryInfo {
+        include_paths,
+        defines,
+        version,
+    } = match found {
+        Some(library) => library,
         None => {
             // Prefer a real library whenever find_libvips succeeds; only fall
             // through here when nothing is installed.
@@ -445,7 +374,11 @@ fn main() {
                          Using pregenerated bindings; install libvips before linking binaries \
                          (pkg-config/vcpkg or LIBVIPS_LIB_DIR), or enable feature `stub` for tests."
                     );
-                    emit_link(if prefer_static() { "static" } else { "dylib" });
+                    emit_link(if options.static_linking {
+                        "static"
+                    } else {
+                        "dylib"
+                    });
                 }
             }
 
@@ -453,10 +386,10 @@ fn main() {
             {
                 if env::var_os("LIBVIPS_NO_BINDGEN").is_some() {
                     // This mode copies prebuilt.rs and needs no headers.
-                    (Vec::new(), Vec::new(), None)
+                    LibraryInfo::default()
                 } else {
                     // Headers for bindgen: vendor tree or nothing.
-                    let mut inc = vendor_include_paths().unwrap_or_default();
+                    let mut inc = vendor_include_paths(&options).unwrap_or_default();
                     if inc.is_empty() {
                         panic!(
                             "vips-sys: libvips headers not found (feature `bindgen`).\n\
@@ -467,12 +400,15 @@ fn main() {
                         );
                     }
                     inc = merge_includes(inc, glib_include_paths());
-                    (inc, Vec::new(), None)
+                    LibraryInfo {
+                        include_paths: inc,
+                        ..LibraryInfo::default()
+                    }
                 }
             }
             #[cfg(not(feature = "bindgen"))]
             {
-                (Vec::new(), Vec::new(), None)
+                LibraryInfo::default()
             }
         }
     };
