@@ -14,10 +14,6 @@ type Defines = Vec<(String, Option<String>)>;
 type VersionOpt = Option<String>;
 type ProbeResult = Option<(IncludePaths, Defines, VersionOpt)>;
 
-/// Bump when bindgen options / allowlist change so cached bindings are invalidated.
-#[cfg(feature = "bindgen")]
-const BINDINGS_SCHEMA: &str = "vips-sys-bindings-v2";
-
 fn env_path(name: &str) -> Option<PathBuf> {
     env::var_os(name).map(PathBuf::from)
 }
@@ -199,43 +195,22 @@ fn find_libvips() -> ProbeResult {
         config.target_triplet(&triplet);
     }
     match config.find_package("vips") {
-        Ok(_lib) => {
-            let mut includes = Vec::new();
-            if let Ok(inc) = env::var("DEP_VIPS_INCLUDE") {
-                for p in env::split_paths(&inc) {
-                    includes.push(p);
-                }
-            }
-            if let Ok(vcpkg_root) = env::var("VCPKG_ROOT") {
-                let base = PathBuf::from(vcpkg_root).join("installed");
-                let triplets = if prefer_static() {
-                    vec!["x64-windows-static", "x64-windows"]
-                } else {
-                    vec!["x64-windows", "x64-windows-static"]
-                };
-                for triplet in triplets {
-                    let p = base.join(triplet).join("include");
-                    if p.is_dir() {
-                        includes.push(p);
-                        break;
-                    }
-                }
-            }
-            includes = merge_includes(includes, vendor_include_paths().unwrap_or_default());
-            Some((includes, Vec::new(), None))
+        Ok(lib) => {
+            // vcpkg already resolved the selected triplet. Do not guess another
+            // installation's headers or merge in an unrelated vendor version.
+            Some((
+                lib.include_paths,
+                Vec::new(),
+                env::var("LIBVIPS_VERSION").ok(),
+            ))
         }
         Err(err) => {
             println!(
                 "cargo:warning=vips-sys: vcpkg could not find vips ({err}); \
                  install with `vcpkg install vips` or set LIBVIPS_LIB_DIR"
             );
-            let includes = vendor_include_paths().unwrap_or_default();
-            if includes.is_empty() {
-                None
-            } else {
-                emit_link(if prefer_static() { "static" } else { "dylib" });
-                Some((includes, Vec::new(), None))
-            }
+            // A header directory alone is not a linkable Windows library.
+            None
         }
     }
 }
@@ -264,10 +239,14 @@ fn find_libvips() -> ProbeResult {
     if prefer_static() {
         cfg.statik(true);
     }
-    if cfg!(feature = "dynamic") {
-        cfg.statik(false);
-    }
-    if let Ok(lib) = cfg.atleast_version("8.2").probe("vips") {
+    if let Ok(lib) = cfg
+        .atleast_version(if cfg!(feature = "v8_18") {
+            "8.18"
+        } else {
+            "8.2"
+        })
+        .probe("vips")
+    {
         return Some((lib.include_paths, Vec::new(), Some(lib.version.clone())));
     }
 
@@ -288,7 +267,7 @@ fn find_libvips() -> ProbeResult {
 /// Generate bindings with bindgen (feature `bindgen` only).
 /// Default builds use `src/bindings/prebuilt.rs` and skip this path entirely.
 #[cfg(feature = "bindgen")]
-fn generate_bindings(include_paths: &[PathBuf], defines: &Defines, version: Option<&str>) {
+fn generate_bindings(include_paths: &[PathBuf], defines: &Defines) {
     println!("cargo:rerun-if-changed=wrapper.h");
     println!("cargo:rerun-if-env-changed=LIBVIPS_NO_BINDGEN");
     println!("cargo:rerun-if-env-changed=LIBVIPS_LIB_DIR");
@@ -298,23 +277,15 @@ fn generate_bindings(include_paths: &[PathBuf], defines: &Defines, version: Opti
     println!("cargo:rerun-if-env-changed=VCPKG_ROOT");
     println!("cargo:rerun-if-changed=vendor/libvips");
 
-    if env::var_os("LIBVIPS_NO_BINDGEN").is_some() {
-        return;
-    }
-
     let out = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR"));
     let binding_rs = out.join("binding.rs");
-    let stamp = out.join("binding.fingerprint");
-    let fp = bindings_fingerprint(include_paths, version);
-
-    // Skip the expensive clang/bindgen pass when inputs are unchanged.
-    if binding_rs.is_file()
-        && let Ok(prev) = fs::read_to_string(&stamp)
-        && prev.trim() == fp
-    {
+    if env::var_os("LIBVIPS_NO_BINDGEN").is_some() {
+        fs::copy("src/bindings/prebuilt.rs", &binding_rs).expect("copy pregenerated bindings");
         return;
     }
 
+    // CargoCallbacks registers every included header. Let Cargo track those
+    // dependencies rather than skipping a rebuild with a partial fingerprint.
     let mut builder = bindgen::Builder::default()
         .header("wrapper.h")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
@@ -376,9 +347,23 @@ fn generate_bindings(include_paths: &[PathBuf], defines: &Defines, version: Opti
             .and_then(|s| s.find("*/").map(|i| &s[i + 2..]))
             .map(|s| s.trim_start_matches('\n'))
             .unwrap_or(&body);
-        let _ = fs::write(&binding_rs, format!("{header}{body}"));
+        // Normalize after generation so bindgen can still derive Copy/Clone
+        // using the known scalar typedefs. GLib sizes are pointer-sized on
+        // LLP64 Windows as well as Unix; C long does not have that guarantee.
+        let mut normalized = String::with_capacity(body.len());
+        for line in body.lines() {
+            normalized.push_str(if line.starts_with("pub type gsize = ") {
+                "pub type gsize = usize;"
+            } else if line.starts_with("pub type gssize = ") {
+                "pub type gssize = isize;"
+            } else {
+                line
+            });
+            normalized.push('\n');
+        }
+        fs::write(&binding_rs, format!("{header}{normalized}"))
+            .expect("Couldn't normalize bindings");
     }
-    let _ = fs::write(&stamp, &fp);
 
     // Convenience for maintainers: print where to copy when refreshing prebuilt.rs
     println!(
@@ -387,35 +372,18 @@ fn generate_bindings(include_paths: &[PathBuf], defines: &Defines, version: Opti
     );
 }
 
-/// Fingerprint helper is only needed when regenerating bindings.
-#[cfg(feature = "bindgen")]
-fn bindings_fingerprint(include_paths: &[PathBuf], version: Option<&str>) -> String {
-    let mut acc = String::with_capacity(256);
-    acc.push_str(BINDINGS_SCHEMA);
-    acc.push('\n');
-    acc.push_str(version.unwrap_or("unknown"));
-    acc.push('\n');
-    for p in include_paths {
-        acc.push_str(&p.display().to_string());
-        acc.push('\n');
-    }
-    if let Ok(w) = fs::read_to_string("wrapper.h") {
-        acc.push_str(&w);
-    }
-    let mut hash: u64 = 0xcbf29ce484222325;
-    for b in acc.as_bytes() {
-        hash ^= *b as u64;
-        hash = hash.wrapping_mul(0x100000001b3);
-    }
-    format!("{hash:016x}")
-}
-
 fn apply_version_cfg(version: &str) {
     println!("cargo:rustc-env=LIBVIPS_VERSION={}", version);
     let ver_parts: Vec<_> = version.split('.').collect();
     if ver_parts.len() >= 2
         && let (Ok(major), Ok(minor)) = (ver_parts[0].parse::<u32>(), ver_parts[1].parse::<u32>())
     {
+        if cfg!(feature = "v8_18") && (major, minor) < (8, 18) {
+            panic!("vips-sys: feature v8_18 requires libvips >= 8.18, found {version}");
+        }
+        if major > 8 || (major == 8 && minor >= 18) {
+            println!("cargo:rustc-cfg=vips_8_18");
+        }
         if major > 8 || (major == 8 && minor >= 17) {
             println!("cargo:rustc-cfg=vips_8_17");
         }
@@ -437,6 +405,10 @@ fn main() {
     println!("cargo:rerun-if-env-changed=LIBVIPS_VERSION");
     println!("cargo:rerun-if-changed=stub/vips_stub.c");
 
+    for cfg in ["vips_8_16", "vips_8_17", "vips_8_18"] {
+        println!("cargo:rustc-check-cfg=cfg({cfg})");
+    }
+    println!("cargo:rerun-if-changed=src/bindings/prebuilt.rs");
     let found = find_libvips();
 
     let (include_paths, defines, version) = match found {
@@ -470,19 +442,24 @@ fn main() {
 
             #[cfg(feature = "bindgen")]
             {
-                // Headers for bindgen: vendor tree or nothing.
-                let mut inc = vendor_include_paths().unwrap_or_default();
-                if inc.is_empty() {
-                    panic!(
-                        "vips-sys: libvips headers not found (feature `bindgen`).\n\
+                if env::var_os("LIBVIPS_NO_BINDGEN").is_some() {
+                    // This mode copies prebuilt.rs and needs no headers.
+                    (Vec::new(), Vec::new(), None)
+                } else {
+                    // Headers for bindgen: vendor tree or nothing.
+                    let mut inc = vendor_include_paths().unwrap_or_default();
+                    if inc.is_empty() {
+                        panic!(
+                            "vips-sys: libvips headers not found (feature `bindgen`).\n\
                          - Unix/macOS: install libvips-dev and pkg-config\n\
                          - Windows MSVC: `vcpkg install vips` (set VCPKG_ROOT)\n\
                          - Or set LIBVIPS_LIB_DIR / LIBVIPS_INCLUDE_DIR\n\
                          - Or `git submodule update --init` for vendor/libvips"
-                    );
+                        );
+                    }
+                    inc = merge_includes(inc, glib_include_paths());
+                    (inc, Vec::new(), None)
                 }
-                inc = merge_includes(inc, glib_include_paths());
-                (inc, Vec::new(), None)
             }
             #[cfg(not(feature = "bindgen"))]
             {
@@ -508,7 +485,7 @@ fn main() {
 
     // Default builds compile `src/bindings/prebuilt.rs` — no clang required.
     #[cfg(feature = "bindgen")]
-    generate_bindings(&include_paths, &defines, version.as_deref());
+    generate_bindings(&include_paths, &defines);
 
     // Silence unused-parameter warnings when bindgen is disabled.
     #[cfg(not(feature = "bindgen"))]

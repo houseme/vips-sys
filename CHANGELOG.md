@@ -9,6 +9,40 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-22
+
+### Added
+
+- Public `helpers::is_initialized` and shared process-wide initialization state.
+- Feature `v8_18` for a libvips 8.18+ probe; register version cfgs including `vips_8_18`.
+- An upstream API/merged-PR audit in `docs/upstream-review-2026-10-22.md`.
+- Refresh configured headers to expose 56 previously omitted enum `*_get_type`
+  functions (1,156 libvips declarations total), preserving all prior functions.
+- `scripts/refresh-prebuilt.py` checks the header version and rejects accidental
+  API removal when maintaining pregenerated bindings.
+
+### Fixed
+
+- `helpers::init` only caches success, permitting retries after errors.
+- Use pointer-sized GLib `gsize`/`gssize` aliases in prebuilt and generated
+  bindings; C `long` is only 32 bits on 64-bit Windows. Compile-time ABI assertions
+  cover those aliases and `GType` on every target.
+- **Breaking:** `helpers::shutdown` is unsafe; callers must prove all native users
+  are finished and that no later libvips calls can occur.
+- `LIBVIPS_NO_BINDGEN` now copies pregenerated bindings into `OUT_DIR` instead of
+  leaving a missing `binding.rs` on a clean build.
+- Remove the incomplete bindgen fingerprint shortcut so Cargo's header dependency
+  callbacks remain effective after rebuilds.
+- Honor `LIBVIPS_STATIC` over Cargo's `dynamic` feature as documented.
+
+### Changed
+
+- Pin the libvips submodule and pregenerated version constants to **8.18.7**.
+  The 8.18.6-to-8.18.7 comparison changes no public headers or function declarations.
+- Remove the invalid tag-as-branch submodule setting; the gitlink pins the revision.
+- Correct the pregenerated libtool ABI version constants from the release headers.
+- Version prepared in Git only; no crates.io publish or release tag.
+
 ### Added
 
 - `Release` workflow supports manual `workflow_dispatch` with a `tag` input (in addition to tag push).
@@ -18,7 +52,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 ### Changed
 
 - CI: `softprops/action-gh-release@v3`; changelog extract uses `shell: bash`.
-- Pin optional build-dep `cc` to `1.4.5` (used by feature `stub`).
+- Update optional build-dependency `cc` from `1.4.5` to `1.9.0` (feature `stub`), retaining the existing dependency refresh.
 - Apply `cargo fmt` to `build.rs` (import order and line wrapping).
 - Point `package.documentation` and README docs links at <https://docs.rs/vips-sys/> (drop GitHub Pages URLs).
 

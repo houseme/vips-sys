@@ -23,10 +23,10 @@ VIPS_STUB_API int vips_version(int field) {
   case 1:
     return 18;
   case 2:
-    return 6;
+    return 7;
   default:
     return 0;
   }
 }
 
-VIPS_STUB_API const char *vips_version_string(void) { return "8.18.6-stub"; }
+VIPS_STUB_API const char *vips_version_string(void) { return "8.18.7-stub"; }

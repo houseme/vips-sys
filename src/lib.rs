@@ -15,7 +15,8 @@
 #![allow(non_upper_case_globals, non_camel_case_types, non_snake_case)]
 #![allow(clippy::missing_safety_doc)]
 
-/// Pregenerated bindings (default). Shared ABI for libvips 8.2+.
+/// Pregenerated declarations from libvips 8.18.7. Callers must ensure that each
+/// symbol they use exists in the linked library; newer APIs need newer libvips.
 #[cfg(not(feature = "bindgen"))]
 #[allow(clippy::all)]
 mod ffi {
@@ -31,29 +32,55 @@ mod ffi {
 
 pub use ffi::*;
 
+// These must hold even for no-link Windows CI builds.
+const _: () = {
+    assert!(core::mem::size_of::<gsize>() == core::mem::size_of::<usize>());
+    assert!(core::mem::size_of::<gssize>() == core::mem::size_of::<isize>());
+    assert!(core::mem::size_of::<GType>() == core::mem::size_of::<usize>());
+};
+
 /// Optional minimal helpers for init / shutdown / version.
 #[cfg(feature = "helpers")]
 pub mod helpers {
     use super::*;
     use std::ffi::CString;
-    use std::sync::OnceLock;
+    use std::sync::{Mutex, OnceLock};
+
+    static INIT: OnceLock<()> = OnceLock::new();
+    static INIT_LOCK: Mutex<()> = Mutex::new(());
+
+    /// Whether this crate has successfully initialized libvips.
+    pub fn is_initialized() -> bool {
+        INIT.get().is_some()
+    }
 
     /// Initialize libvips. Later calls reuse the first successful result.
     pub fn init(argv0: &str) -> Result<(), i32> {
-        static INIT: OnceLock<Result<(), i32>> = OnceLock::new();
         // Avoid CString allocation when init already succeeded.
-        if let Some(res) = INIT.get() {
-            return *res;
+        if INIT.get().is_some() {
+            return Ok(());
+        }
+        let _guard = INIT_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        if INIT.get().is_some() {
+            return Ok(());
         }
         let c = CString::new(argv0).map_err(|_| -1)?;
-        *INIT.get_or_init(|| {
-            let rc = unsafe { vips_init(c.as_ptr()) };
-            if rc == 0 { Ok(()) } else { Err(rc) }
-        })
+        let rc = unsafe { vips_init(c.as_ptr()) };
+        if rc != 0 {
+            return Err(rc);
+        }
+        let _ = INIT.set(());
+        Ok(())
     }
 
-    /// Shut down libvips. Prefer calling once at process exit.
-    pub fn shutdown() {
+    /// Shut down libvips permanently. It cannot be initialized again.
+    ///
+    /// # Safety
+    /// All images, regions, interpolators, workers and other libvips users
+    /// must have finished and been destroyed. No later libvips calls, including
+    /// `init`, may occur. Prefer leaving cleanup to process exit.
+    pub unsafe fn shutdown() {
+        // SAFETY: the caller guarantees that all libvips use has ended.
         unsafe { vips_shutdown() }
     }
 
@@ -87,11 +114,17 @@ mod tests {
 
     #[test]
     fn init_and_version() {
+        assert_eq!(helpers::init("invalid\0name"), Err(-1));
         helpers::init("vips-sys-test").expect("vips_init");
         let (maj, min, mic) = helpers::version();
         assert!(maj >= 0 && min >= 0 && mic >= 0);
         assert!(!helpers::version_string().is_empty());
         // Cached: second call is free and consistent.
         assert_eq!(helpers::version(), (maj, min, mic));
+        std::thread::scope(|scope| {
+            for _ in 0..8 {
+                scope.spawn(|| helpers::init("parallel-init").unwrap());
+            }
+        });
     }
 }

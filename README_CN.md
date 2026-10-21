@@ -11,7 +11,7 @@
 `libvips` 的 Rust 低层 FFI 绑定。追求稳定、精简，可作为更高层安全封装的基础。
 
 - 文档：https://docs.rs/vips-sys/
-- 依赖：Rust **1.85+**（edition 2024）；`libvips >= 8.2`（绑定按 **8.18.6** 生成）
+- 依赖：当前 stable Rust（edition 2024）；`libvips >= 8.2`（绑定按 **8.18.7** 生成）
 - 目标：构建快、链接可靠、跨平台复用
 
 ## 核心特性
@@ -24,6 +24,17 @@
 | 适用场景 | 日常开发 / CI | 更新 API / 跟进新版 libvips |
 
 **默认构建不跑 bindgen**，只需要能链接到 libvips **库**。
+
+## 0.3.0 兼容性
+
+`helpers::shutdown` 改为 unsafe：调用者必须确认全部 libvips 对象和线程已结束，
+且之后不会再调用 libvips。常规应用应保持初始化状态直至进程退出；初始化失败允许重试。
+
+`v8_18` feature 请求 libvips 8.18+ 的链接探测。默认预生成文件也包含较新声明，
+但声明不代表旧系统库具有相应符号，使用前必须满足各 API 的版本要求。
+
+子模块固定至最新正式版 **8.18.7**，其公开头文件相对 8.18.6 没有变化。
+完整核查见 [upstream review](docs/upstream-review-2026-10-22.md)。本版本仅在 Git 中准备，尚未发布。
 
 ## 安装
 
@@ -56,7 +67,7 @@ set VCPKG_ROOT=C:\path\to\vcpkg
 
 ```toml
 [dependencies]
-vips-sys = { version = "0.2.0", features = ["helpers"] }
+vips-sys = { version = "0.3.0", features = ["helpers"] }
 ```
 
 ### Features
@@ -64,7 +75,7 @@ vips-sys = { version = "0.2.0", features = ["helpers"] }
 | Feature | 默认 | 说明 |
 |---------|------|------|
 | *(无)* | ✓ | 预生成绑定 + 链接探测 |
-| `helpers` | | `init` / `shutdown` / `version` / `version_string`（带缓存） |
+| `helpers` | | `init` / `is_initialized` / unsafe `shutdown` / 带缓存的版本查询 |
 | `static` | | 优先静态链接（可用 `LIBVIPS_STATIC=1` 覆盖） |
 | `dynamic` | | 优先动态链接 |
 | `bindgen` | | 用 clang 按本机头文件重新生成绑定 |
@@ -82,7 +93,7 @@ cargo test --features helpers,stub
 ### 静态链接
 
 ```toml
-vips-sys = { version = "0.2.0", features = ["static"] }
+vips-sys = { version = "0.3.0", features = ["static"] }
 ```
 
 ```bash
@@ -97,7 +108,7 @@ LIBVIPS_STATIC=1 cargo build
 
 ### 子模块中的 libvips
 
-`vendor/libvips` 固定 [libvips](https://github.com/libvips/libvips) **v8.18.6**
+`vendor/libvips` 固定 [libvips](https://github.com/libvips/libvips) **v8.18.7**
 （参见 [rust-sys-crate](https://kornel.ski/rust-sys-crate)）：
 
 ```bash
@@ -119,7 +130,7 @@ git submodule update --init --recursive
 # 需要：libclang、glib 头文件，以及 vips 头文件（系统或 vendor 子模块）
 cargo build --features bindgen
 # build.rs 会打印 OUT_DIR 路径，复制覆盖即可：
-cp target/debug/build/vips-sys-*/out/binding.rs src/bindings/prebuilt.rs
+python3 scripts/refresh-prebuilt.py target/debug/build/<exact-build-id>/out/binding.rs --version 8.18.7
 ```
 
 `wrapper.h` 作为唯一 bindgen 入口**保留**；`generate.sh` 已移除，改用 `bindgen` feature。
@@ -127,7 +138,9 @@ cp target/debug/build/vips-sys-*/out/binding.rs src/bindings/prebuilt.rs
 构建期导出：
 
 - `LIBVIPS_VERSION`：检测到的版本（有 pkg-config 时）
-- `cfg(vips_8_16)` / `cfg(vips_8_17)`：版本满足时启用
+- `cfg(vips_8_16)` / `cfg(vips_8_17)` / `cfg(vips_8_18)`：版本满足时启用
+
+刷新完整预生成接口时，头文件应启用 deprecated API。脚本会核对版本并拒绝意外删除现有声明，且不会把维护者的 codec 配置写入通用默认文件。
 
 ## 示例（`helpers`）
 
@@ -138,7 +151,7 @@ fn main() {
     helpers::init("vips-sys-example").expect("vips init failed");
     let (a, b, c) = helpers::version();
     println!("libvips {}.{}.{} ({})", a, b, c, helpers::version_string());
-    helpers::shutdown();
+    // 全局资源保持可用，由操作系统在进程退出时回收。
 }
 ```
 
@@ -150,7 +163,7 @@ fn main() {
 | `LIBVIPS_LIB_DIR` / `LIBVIPS_INCLUDE_DIR` | 显式指定库 / 头文件 |
 | `LIBVIPS_STATIC` | `1` 优先静态；`0`/`false`/`off` 关闭 |
 | `LIBVIPS_NO_VENDOR` | 忽略 `vendor/libvips` |
-| `LIBVIPS_NO_BINDGEN` | 与 `bindgen` feature 合用时跳过生成 |
+| `LIBVIPS_NO_BINDGEN` | 与 `bindgen` 合用时复制预生成绑定，无需解析头文件 |
 | `LIBVIPS_VERSION` | 覆盖用于 cfg 的版本字符串 |
 | `VCPKG_ROOT` / `VCPKG_DEFAULT_TRIPLET` | Windows vcpkg |
 | `BINDGEN_EXTRA_CLANG_ARGS` | 额外 clang 参数（`bindgen` feature） |
