@@ -57,6 +57,15 @@ pub fn header_version(header: &str) -> Option<String> {
     })
 }
 
+pub fn version_at_least(version: &str, major: u32, minor: u32) -> bool {
+    let mut parts = version.split('.');
+    let detected = parts
+        .next()
+        .and_then(|s| s.parse::<u32>().ok())
+        .zip(parts.next().and_then(|s| s.parse::<u32>().ok()));
+    detected.is_some_and(|detected| detected >= (major, minor))
+}
+
 pub fn cpp_stdlib(target: &str, override_value: Option<String>) -> Option<String> {
     if let Some(value) = override_value {
         return (!value.is_empty()).then_some(value);

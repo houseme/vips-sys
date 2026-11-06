@@ -18,4 +18,4 @@ jobs:
           sudo apt install -y cmake libclang-dev pkg-config libvips-dev
 
       - name: Run cargo doc
-        run: cargo doc --no-deps --all-features
+        run: cargo doc --no-deps --features helpers

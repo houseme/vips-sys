@@ -291,12 +291,18 @@ fn generate_bindings(include_paths: &[PathBuf], defines: &Defines) {
 
 fn apply_version_cfg(version: &str) {
     println!("cargo:rustc-env=LIBVIPS_VERSION={}", version);
+    let required_minor = if cfg!(feature = "v8_19") { 19 } else { 18 };
+    if cfg!(feature = "v8_18") && !config::version_at_least(version, 8, required_minor) {
+        panic!(
+            "vips-sys: enabled API feature requires libvips >= 8.{required_minor}, found {version}"
+        );
+    }
     let mut parts = version.split('.');
     if let (Some(major), Some(minor)) = (parts.next(), parts.next())
         && let (Ok(major), Ok(minor)) = (major.parse::<u32>(), minor.parse::<u32>())
     {
-        if cfg!(feature = "v8_18") && (major, minor) < (8, 18) {
-            panic!("vips-sys: feature v8_18 requires libvips >= 8.18, found {version}");
+        if major > 8 || (major == 8 && minor >= 19) {
+            println!("cargo:rustc-cfg=vips_8_19");
         }
         if major > 8 || (major == 8 && minor >= 18) {
             println!("cargo:rustc-cfg=vips_8_18");
@@ -338,7 +344,7 @@ fn main() {
     println!("cargo:rerun-if-env-changed=LIBVIPS_VERSION");
     println!("cargo:rerun-if-changed=stub/vips_stub.c");
 
-    for cfg in ["vips_8_16", "vips_8_17", "vips_8_18"] {
+    for cfg in ["vips_8_16", "vips_8_17", "vips_8_18", "vips_8_19"] {
         println!("cargo:rustc-check-cfg=cfg({cfg})");
     }
     println!("cargo:rerun-if-changed=src/bindings/prebuilt.rs");

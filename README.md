@@ -11,7 +11,7 @@
 Low-level Rust FFI bindings for `libvips`. Designed to be stable, minimal, and a foundation for higher-level wrappers.
 
 - Docs: https://docs.rs/vips-sys/
-- Requirement: Current stable Rust (edition 2024); `libvips >= 8.2` (bindings generated from **8.18.7**)
+- Requirement: Current stable Rust (edition 2024); `libvips >= 8.2` (bindings generated from **8.19.0-rc1**)
 - Goals: fast builds, reliable linking, cross-platform reuse
 
 ## Highlights
@@ -35,8 +35,12 @@ Feature `v8_18` requests a libvips 8.18+ link probe. The default declarations
 also contain newer symbols, but a declaration does not add that symbol to an
 older system library. Only call APIs present in the library you link.
 
-The vendored source is pinned to the latest release, **8.18.7**. Its public
-headers are unchanged from 8.18.6. See the [upstream audit](docs/upstream-review-2026-10-22.md).
+The 0.4.0 development version pins the **8.19.0-rc1 prerelease**.
+Feature `v8_19` includes `v8_18` and requires native libvips 8.19+.
+The pregenerated surface contains 1,175 functions, including 19 new declarations.
+The latest stable native release is 8.18.7. Version 0.4.0 is prepared in Git.
+The crates.io examples below refer to the published 0.3.0 package.
+See the [API and merged-PR audit](docs/upstream-review-2026-11-07.md).
 
 ## Installation
 
@@ -143,7 +147,7 @@ Cross targets require prebuilt target libraries rather than this native builder.
 
 ### Vendored libvips (submodule)
 
-`vendor/libvips` tracks [libvips](https://github.com/libvips/libvips) at **v8.18.7**
+`vendor/libvips` tracks [libvips](https://github.com/libvips/libvips) at **v8.19.0-rc1**
 (see [rust-sys-crate](https://kornel.ski/rust-sys-crate)):
 
 ```bash
@@ -165,7 +169,7 @@ Link / header resolution:
 # Requires: libclang, glib headers, and vips headers (system or vendor submodule)
 cargo build --features bindgen
 # build.rs prints the OUT_DIR path — copy it over:
-python3 scripts/refresh-prebuilt.py target/debug/build/<exact-build-id>/out/binding.rs --version 8.18.7
+python3 scripts/refresh-prebuilt.py target/debug/build/<exact-build-id>/out/binding.rs --version 8.19.0
 ```
 
 Use headers configured with deprecated APIs enabled when refreshing the complete

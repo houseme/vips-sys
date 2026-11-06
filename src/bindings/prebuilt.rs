@@ -502,14 +502,14 @@ pub const VIPS_PATH_MAX: u32 = 4096;
 pub const VIPS_TARGET_BUFFER_SIZE: u32 = 8500;
 pub const VIPS_TARGET_CUSTOM_BUFFER_SIZE: u32 = 4096;
 pub const VIPS_SBUF_BUFFER_SIZE: u32 = 4096;
-pub const VIPS_VERSION: &[u8; 7] = b"8.18.7\0";
-pub const VIPS_VERSION_STRING: &[u8; 7] = b"8.18.7\0";
+pub const VIPS_VERSION: &[u8; 7] = b"8.19.0\0";
+pub const VIPS_VERSION_STRING: &[u8; 7] = b"8.19.0\0";
 pub const VIPS_MAJOR_VERSION: u32 = 8;
-pub const VIPS_MINOR_VERSION: u32 = 18;
-pub const VIPS_MICRO_VERSION: u32 = 7;
-pub const VIPS_LIBRARY_CURRENT: u32 = 62;
-pub const VIPS_LIBRARY_REVISION: u32 = 7;
-pub const VIPS_LIBRARY_AGE: u32 = 20;
+pub const VIPS_MINOR_VERSION: u32 = 19;
+pub const VIPS_MICRO_VERSION: u32 = 0;
+pub const VIPS_LIBRARY_CURRENT: u32 = 63;
+pub const VIPS_LIBRARY_REVISION: u32 = 0;
+pub const VIPS_LIBRARY_AGE: u32 = 21;
 pub const VIPS_CONFIG: &[u8; 29] = b"vendored headers for bindgen\0";
 pub const VIPS_ENABLE_DEPRECATED: u32 = 1;
 pub const VIPS_SPARE: u32 = 8;
@@ -543,6 +543,13 @@ pub const VIPS_META_N_SUBIFDS: &[u8; 10] = b"n-subifds\0";
 pub const VIPS_META_CONCURRENCY: &[u8; 12] = b"concurrency\0";
 pub const VIPS_META_TILE_WIDTH: &[u8; 11] = b"tile-width\0";
 pub const VIPS_META_TILE_HEIGHT: &[u8; 12] = b"tile-height\0";
+pub const VIPS_META_CICP_COLOUR_PRIMARIES: &[u8; 22] = b"cicp-colour-primaries\0";
+pub const VIPS_META_CICP_TRANSFER_CHARACTERISTICS: &[u8; 30] = b"cicp-transfer-characteristics\0";
+pub const VIPS_META_CICP_MATRIX_COEFFICIENTS: &[u8; 25] = b"cicp-matrix-coefficients\0";
+pub const VIPS_META_CICP_FULL_RANGE_FLAG: &[u8; 21] = b"cicp-full-range-flag\0";
+pub const VIPS_META_CLLI_MAX_CONTENT_LIGHT_LEVEL: &[u8; 29] = b"clli-max-content-light-level\0";
+pub const VIPS_META_CLLI_MAX_FRAME_AVERAGE_LIGHT_LEVEL: &[u8; 35] =
+    b"clli-max-frame-average-light-level\0";
 pub const VIPS_D93_X0: f64 = 89.74;
 pub const VIPS_D93_Y0: f64 = 100.0;
 pub const VIPS_D93_Z0: f64 = 130.77;
@@ -573,6 +580,7 @@ pub const VIPS_E_Z0: f64 = 100.0;
 pub const VIPS_D3250_X0: f64 = 105.659;
 pub const VIPS_D3250_Y0: f64 = 100.0;
 pub const VIPS_D3250_Z0: f64 = 45.8501;
+pub const VIPS_UHDR_TO_SCRGB: f64 = 2.5375;
 pub const VIPS_META_IPCT_NAME: &[u8; 10] = b"iptc-data\0";
 pub const VIPS_EXEEXT: &[u8; 1] = b"\0";
 pub const VIPS_VECTOR_SOURCE_MAX: u32 = 10;
@@ -3265,6 +3273,15 @@ unsafe extern "C" {
     );
 }
 unsafe extern "C" {
+    pub fn vips_region_blend_over(
+        reg: *mut VipsRegion,
+        dest: *mut VipsRegion,
+        r: *const VipsRect,
+        x: core::ffi::c_int,
+        y: core::ffi::c_int,
+    );
+}
+unsafe extern "C" {
     pub fn vips_region_shrink_method(
         from: *mut VipsRegion,
         to: *mut VipsRegion,
@@ -3736,6 +3753,9 @@ unsafe extern "C" {
     pub fn vips_image_copy_memory(image: *mut VipsImage) -> *mut VipsImage;
 }
 unsafe extern "C" {
+    pub fn vips_image_copy_draw(image: *mut VipsImage) -> *mut VipsImage;
+}
+unsafe extern "C" {
     pub fn vips_image_wio_input(image: *mut VipsImage) -> core::ffi::c_int;
 }
 unsafe extern "C" {
@@ -3879,6 +3899,10 @@ pub type VipsOperation_autoptr = *mut VipsOperation;
 pub type VipsOperation_listautoptr = *mut GList;
 pub type VipsOperation_slistautoptr = *mut GSList;
 pub type VipsOperation_queueautoptr = *mut GQueue;
+pub type VipsRect_autoptr = *mut VipsRect;
+pub type VipsRect_listautoptr = *mut GList;
+pub type VipsRect_slistautoptr = *mut GSList;
+pub type VipsRect_queueautoptr = *mut GQueue;
 pub type VipsArrayDouble_autoptr = *mut VipsArrayDouble;
 pub type VipsArrayDouble_listautoptr = *mut GList;
 pub type VipsArrayDouble_slistautoptr = *mut GSList;
@@ -3979,6 +4003,12 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn vips_error_exit(fmt: *const core::ffi::c_char, ...) -> !;
+}
+unsafe extern "C" {
+    pub fn vips_check_draw(
+        domain: *const core::ffi::c_char,
+        image: *mut VipsImage,
+    ) -> core::ffi::c_int;
 }
 unsafe extern "C" {
     pub fn vips_check_uncoded(
@@ -4626,6 +4656,9 @@ unsafe extern "C" {
     pub fn vips_image_get_n_pages(image: *mut VipsImage) -> core::ffi::c_int;
 }
 unsafe extern "C" {
+    pub fn vips_image_get_loop(image: *mut VipsImage) -> core::ffi::c_int;
+}
+unsafe extern "C" {
     pub fn vips_image_get_n_subifds(image: *mut VipsImage) -> core::ffi::c_int;
 }
 unsafe extern "C" {
@@ -4748,6 +4781,13 @@ unsafe extern "C" {
         name: *const core::ffi::c_char,
         data: *mut *const core::ffi::c_void,
         length: *mut usize,
+    ) -> core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn vips_image_get_blob_value(
+        image: *const VipsImage,
+        name: *const core::ffi::c_char,
+        blob: *mut *mut VipsBlob,
     ) -> core::ffi::c_int;
 }
 unsafe extern "C" {
@@ -5688,6 +5728,50 @@ unsafe extern "C" {
     ) -> core::ffi::c_int;
 }
 unsafe extern "C" {
+    pub fn vips_qoiload(
+        filename: *const core::ffi::c_char,
+        out: *mut *mut VipsImage,
+        ...
+    ) -> core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn vips_qoiload_buffer(
+        buf: *mut core::ffi::c_void,
+        len: usize,
+        out: *mut *mut VipsImage,
+        ...
+    ) -> core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn vips_qoiload_source(
+        source: *mut VipsSource,
+        out: *mut *mut VipsImage,
+        ...
+    ) -> core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn vips_qoisave(
+        in_: *mut VipsImage,
+        filename: *const core::ffi::c_char,
+        ...
+    ) -> core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn vips_qoisave_buffer(
+        in_: *mut VipsImage,
+        buf: *mut *mut core::ffi::c_void,
+        len: *mut usize,
+        ...
+    ) -> core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn vips_qoisave_target(
+        in_: *mut VipsImage,
+        target: *mut VipsTarget,
+        ...
+    ) -> core::ffi::c_int;
+}
+unsafe extern "C" {
     pub fn vips_matload(
         filename: *const core::ffi::c_char,
         out: *mut *mut VipsImage,
@@ -6164,6 +6248,15 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn vips_pcs_get_type() -> GType;
+}
+unsafe extern "C" {
+    pub fn vips_cicp_colour_primaries_get_type() -> GType;
+}
+unsafe extern "C" {
+    pub fn vips_cicp_transfer_characteristics_get_type() -> GType;
+}
+unsafe extern "C" {
+    pub fn vips_cicp_matrix_coefficients_get_type() -> GType;
 }
 unsafe extern "C" {
     pub fn vips_extend_get_type() -> GType;
@@ -7211,7 +7304,8 @@ pub enum VipsInteresting {
     VIPS_INTERESTING_LOW = 4,
     VIPS_INTERESTING_HIGH = 5,
     VIPS_INTERESTING_ALL = 6,
-    VIPS_INTERESTING_LAST = 7,
+    VIPS_INTERESTING_SPECIFIC = 7,
+    VIPS_INTERESTING_LAST = 8,
 }
 #[repr(u32)]
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -7241,7 +7335,11 @@ pub enum VipsBlendMode {
     VIPS_BLEND_MODE_SOFT_LIGHT = 22,
     VIPS_BLEND_MODE_DIFFERENCE = 23,
     VIPS_BLEND_MODE_EXCLUSION = 24,
-    VIPS_BLEND_MODE_LAST = 25,
+    VIPS_BLEND_MODE_HUE = 25,
+    VIPS_BLEND_MODE_SATURATION = 26,
+    VIPS_BLEND_MODE_COLOUR = 27,
+    VIPS_BLEND_MODE_LUMINOSITY = 28,
+    VIPS_BLEND_MODE_LAST = 29,
 }
 unsafe extern "C" {
     pub fn vips_copy(in_: *mut VipsImage, out: *mut *mut VipsImage, ...) -> core::ffi::c_int;
@@ -7874,6 +7972,14 @@ unsafe extern "C" {
     ) -> core::ffi::c_int;
 }
 unsafe extern "C" {
+    pub fn vips_percent_lum(
+        in_: *mut VipsImage,
+        percent: f64,
+        threshold: *mut f64,
+        ...
+    ) -> core::ffi::c_int;
+}
+unsafe extern "C" {
     pub fn vips_stdif(
         in_: *mut VipsImage,
         out: *mut *mut VipsImage,
@@ -8119,6 +8225,64 @@ pub enum VipsPCS {
     VIPS_PCS_XYZ = 1,
     VIPS_PCS_LAST = 2,
 }
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum VipsCICPColourPrimaries {
+    VIPS_CICP_COLOUR_PRIMARIES_BT709 = 1,
+    VIPS_CICP_COLOUR_PRIMARIES_UNSPECIFIED = 2,
+    VIPS_CICP_COLOUR_PRIMARIES_BT470M = 4,
+    VIPS_CICP_COLOUR_PRIMARIES_BT470BG = 5,
+    VIPS_CICP_COLOUR_PRIMARIES_BT601 = 6,
+    VIPS_CICP_COLOUR_PRIMARIES_SMPTE240 = 7,
+    VIPS_CICP_COLOUR_PRIMARIES_GENERIC_FILM = 8,
+    VIPS_CICP_COLOUR_PRIMARIES_BT2020 = 9,
+    VIPS_CICP_COLOUR_PRIMARIES_SMPTE428 = 10,
+    VIPS_CICP_COLOUR_PRIMARIES_SMPTE431 = 11,
+    VIPS_CICP_COLOUR_PRIMARIES_SMPTE432 = 12,
+    VIPS_CICP_COLOUR_PRIMARIES_EBU3213 = 22,
+    VIPS_CICP_COLOUR_PRIMARIES_LAST = 23,
+}
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum VipsCICPTransferCharacteristics {
+    VIPS_CICP_TRANSFER_BT709 = 1,
+    VIPS_CICP_TRANSFER_UNSPECIFIED = 2,
+    VIPS_CICP_TRANSFER_BT470M = 4,
+    VIPS_CICP_TRANSFER_BT470BG = 5,
+    VIPS_CICP_TRANSFER_BT601 = 6,
+    VIPS_CICP_TRANSFER_SMPTE240 = 7,
+    VIPS_CICP_TRANSFER_LINEAR = 8,
+    VIPS_CICP_TRANSFER_LOG_100 = 9,
+    VIPS_CICP_TRANSFER_LOG_100_SQRT10 = 10,
+    VIPS_CICP_TRANSFER_IEC61966 = 11,
+    VIPS_CICP_TRANSFER_BT1361 = 12,
+    VIPS_CICP_TRANSFER_SRGB = 13,
+    VIPS_CICP_TRANSFER_BT2020_10BIT = 14,
+    VIPS_CICP_TRANSFER_BT2020_12BIT = 15,
+    VIPS_CICP_TRANSFER_PQ = 16,
+    VIPS_CICP_TRANSFER_SMPTE428 = 17,
+    VIPS_CICP_TRANSFER_HLG = 18,
+    VIPS_CICP_TRANSFER_LAST = 19,
+}
+#[repr(u32)]
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
+pub enum VipsCICPMatrixCoefficients {
+    VIPS_CICP_MATRIX_RGB = 0,
+    VIPS_CICP_MATRIX_BT709 = 1,
+    VIPS_CICP_MATRIX_UNSPECIFIED = 2,
+    VIPS_CICP_MATRIX_FCC = 4,
+    VIPS_CICP_MATRIX_BT470BG = 5,
+    VIPS_CICP_MATRIX_BT601 = 6,
+    VIPS_CICP_MATRIX_SMPTE240 = 7,
+    VIPS_CICP_MATRIX_YCGCO = 8,
+    VIPS_CICP_MATRIX_BT2020_NCL = 9,
+    VIPS_CICP_MATRIX_BT2020_CL = 10,
+    VIPS_CICP_MATRIX_SMPTE2085 = 11,
+    VIPS_CICP_MATRIX_CHROMA_NCL = 12,
+    VIPS_CICP_MATRIX_CHROMA_CL = 13,
+    VIPS_CICP_MATRIX_ICTCP = 14,
+    VIPS_CICP_MATRIX_LAST = 15,
+}
 unsafe extern "C" {
     pub fn vips_colourspace_issupported(image: *const VipsImage) -> gboolean;
 }
@@ -8224,6 +8388,12 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn vips_uhdr2scRGB(in_: *mut VipsImage, out: *mut *mut VipsImage, ...) -> core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn vips_CICP2scRGB(in_: *mut VipsImage, out: *mut *mut VipsImage, ...) -> core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn vips_scRGB2CICP(in_: *mut VipsImage, out: *mut *mut VipsImage, ...) -> core::ffi::c_int;
 }
 unsafe extern "C" {
     pub fn vips_profile_load(
@@ -9273,6 +9443,12 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn vips_leak_set(leak: gboolean);
+}
+unsafe extern "C" {
+    pub fn vips_unlimited_set(unlimited: gboolean);
+}
+unsafe extern "C" {
+    pub fn vips_unlimited_get() -> gboolean;
 }
 unsafe extern "C" {
     pub fn vips_block_untrusted_set(state: gboolean);

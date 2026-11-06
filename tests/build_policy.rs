@@ -27,6 +27,16 @@ fn version_comes_from_the_selected_headers() {
 }
 
 #[test]
+fn api_version_requirements_accept_rc_headers_and_reject_old_libraries() {
+    assert!(config::version_at_least("8.19.0", 8, 19));
+    assert!(config::version_at_least("8.19.0-rc1", 8, 19));
+    assert!(config::version_at_least("9.0.0", 8, 19));
+    assert!(!config::version_at_least("8.18.7", 8, 19));
+    assert!(!config::version_at_least("8.17.0", 8, 18));
+    assert!(!config::version_at_least("unknown", 8, 19));
+}
+
+#[test]
 fn static_vendor_uses_the_platform_cpp_runtime() {
     assert_eq!(
         config::cpp_stdlib("aarch64-apple-darwin", None).as_deref(),

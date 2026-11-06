@@ -245,14 +245,9 @@ pub(super) fn find(options: &BuildOptions) -> ProbeResult {
         cfg.statik(true);
         cfg.cargo_metadata(false);
     }
-    if let Ok(lib) = cfg
-        .atleast_version(if cfg!(feature = "v8_18") {
-            "8.18"
-        } else {
-            "8.2"
-        })
-        .probe("vips")
-    {
+    // Discover the installed version before validating feature requirements.
+    // Filtering here would hide an old library and fall through to bare -lvips.
+    if let Ok(lib) = cfg.atleast_version("8.2").probe("vips") {
         if options.static_linking {
             emit_static_metadata(&lib);
         }

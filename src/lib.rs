@@ -15,7 +15,7 @@
 #![allow(non_upper_case_globals, non_camel_case_types, non_snake_case)]
 #![allow(clippy::missing_safety_doc)]
 
-/// Pregenerated declarations from libvips 8.18.7. Callers must ensure that each
+/// Pregenerated declarations from libvips 8.19.0-rc1. Callers must ensure that each
 /// symbol they use exists in the linked library; newer APIs need newer libvips.
 #[cfg(not(feature = "bindgen"))]
 #[allow(clippy::all)]

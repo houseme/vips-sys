@@ -9,6 +9,41 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-07
+
+Prepared in Git for coordinated testing. Package publication is deferred.
+
+### Added
+
+- Opt-in `v8_19` feature, including `v8_18`, for libvips 8.19 APIs.
+- Regenerated bindings contain 1,175 libvips functions, adding 19 declarations
+  for QOI IO, CICP colour conversion and enum types, luminance percentiles,
+  loop/blob metadata, drawable images, region blending and unlimited controls.
+- CICP/CLLI metadata constants, CICP enum families, specific-point crop interest
+  and four non-separable blend modes.
+- A pinned native 8.19 CI job and an API/merged-PR audit with remaining work.
+
+### Changed
+
+- Pin the vendor gitlink to **v8.19.0-rc1**, commit `115df84b47247fb3d644de16bbb997f9edc4b5e3`.
+  Header constants report 8.19.0. Upstream's latest stable release is 8.18.7.
+- Distro CI checks use features supported by their installed native library.
+  The dedicated 8.19 job checks the expanded API against the pinned source.
+
+### Fixed
+
+- Detect installed native library versions before checking requested API features.
+  An older pkg-config library now fails with a version diagnostic instead of
+  falling through to a bare linker argument that bypassed the feature check.
+- Reject malformed detected versions when a version feature is requested.
+
+### Known upstream limitations
+
+- 8.19.0-rc1 QOI thumbnail decoding can fail with `bad QOI magic`, reproduced
+  directly in C. QOI file/buffer load and save round trips pass.
+- Post-RC changes such as HDR reference-white normalization (#5295) and
+  additional Deep Zoom path validation (#5286) are tracked in the audit.
+
 ## [0.3.0] - 2026-10-22
 
 ### Added

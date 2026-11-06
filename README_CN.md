@@ -11,7 +11,7 @@
 `libvips` 的 Rust 低层 FFI 绑定。追求稳定、精简，可作为更高层安全封装的基础。
 
 - 文档：https://docs.rs/vips-sys/
-- 依赖：当前 stable Rust（edition 2024）；`libvips >= 8.2`（绑定按 **8.18.7** 生成）
+- 依赖：当前 stable Rust（edition 2024）；`libvips >= 8.2`（绑定按 **8.19.0-rc1** 生成）
 - 目标：构建快、链接可靠、跨平台复用
 
 ## 核心特性
@@ -33,8 +33,11 @@
 `v8_18` feature 请求 libvips 8.18+ 的链接探测。默认预生成文件也包含较新声明，
 但声明不代表旧系统库具有相应符号，使用前必须满足各 API 的版本要求。
 
-子模块固定至最新正式版 **8.18.7**，其公开头文件相对 8.18.6 没有变化。
-完整核查见 [upstream review](docs/upstream-review-2026-10-22.md)。
+0.4.0 开发版本的子模块固定至 **8.19.0-rc1 预发布版**。
+`v8_19` feature 包含 `v8_18`，要求原生 libvips 8.19+。
+预生成绑定共有 1,175 个函数，新增 19 个声明。最新原生稳定版为 8.18.7。
+0.4.0 本次仅在 Git 准备；下方 crates.io 示例对应已发布的 0.3.0。
+详见 [API 与合并 PR 核查](docs/upstream-review-2026-11-07.md)。
 
 ## 安装
 
@@ -135,7 +138,7 @@ LIBVIPS_STATIC=1 cargo build
 
 ### 子模块中的 libvips
 
-`vendor/libvips` 固定 [libvips](https://github.com/libvips/libvips) **v8.18.7**
+`vendor/libvips` 固定 [libvips](https://github.com/libvips/libvips) **v8.19.0-rc1**
 （参见 [rust-sys-crate](https://kornel.ski/rust-sys-crate)）：
 
 ```bash
@@ -157,7 +160,7 @@ git submodule update --init --recursive
 # 需要：libclang、glib 头文件，以及 vips 头文件（系统或 vendor 子模块）
 cargo build --features bindgen
 # build.rs 会打印 OUT_DIR 路径，复制覆盖即可：
-python3 scripts/refresh-prebuilt.py target/debug/build/<exact-build-id>/out/binding.rs --version 8.18.7
+python3 scripts/refresh-prebuilt.py target/debug/build/<exact-build-id>/out/binding.rs --version 8.19.0
 ```
 
 `wrapper.h` 作为唯一 bindgen 入口**保留**；`generate.sh` 已移除，改用 `bindgen` feature。
